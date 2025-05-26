@@ -411,61 +411,85 @@ class FlightSimulator {
     
     updatePhysics(deltaTime) {
         const force = new THREE.Vector3();
-        const baseSpeed = 25;
+        const baseSpeed = 35; // 增加基础速度
         
         this.afterburnerActive = this.controls.ShiftLeft || this.controls.ShiftRight;
         
+        // 油门响应 - 降低加速度
         if (this.controls.KeyW) {
-            this.throttle = Math.min(this.throttle + deltaTime * 2, 1);
+            this.throttle = this.throttle + deltaTime * 1.5; // 降低加速度，从4降到1.5
         }
         if (this.controls.KeyS) {
-            // On ground (altitude <= 2.5), S provides reverse thrust for backing up
+            // 在地面时，S键提供反向推力
             if (this.airplane.position.y <= 2.5) {
-                this.throttle = Math.max(this.throttle - deltaTime * 2, -0.5); // Allow negative throttle for reverse
+                this.throttle = Math.max(this.throttle - deltaTime * 1.5, -0.5);
             } else {
-                // In air, S reduces forward throttle only
-                this.throttle = Math.max(this.throttle - deltaTime * 2, 0);
+                // 在空中时，S键减少前进推力
+                this.throttle = Math.max(this.throttle - deltaTime * 1.5, 0);
             }
         }
         
-        this.rudderAngle = this.rudderAngle || 0;
-        const rudderSpeed = 2.0;
+        // 初始化飞机姿态角度
+        this.pitchAngle = this.pitchAngle || 0; // 俯仰角 (绕Z轴)
+        this.yawAngle = this.yawAngle || 0;     // 偏航角 (绕Y轴) 
+        this.rollAngle = this.rollAngle || 0;   // 翻滚角 (绕X轴)
         
-        // Only rotate rudder, not airplane directly
-        // Always relative to airplane's local coordinate system (nose forward)
-        if (this.controls.KeyA || this.controls.ArrowLeft) {
-            // A key or Left arrow: rudder turns to airplane's left side
-            this.rudderAngle = Math.min(this.rudderAngle + deltaTime * rudderSpeed, Math.PI / 8);
-        } else if (this.controls.KeyD || this.controls.ArrowRight) {
-            // D key or Right arrow: rudder turns to airplane's right side
-            this.rudderAngle = Math.max(this.rudderAngle - deltaTime * rudderSpeed, -Math.PI / 8);
-        } else {
-            // Return rudder to neutral position when no input
-            this.rudderAngle = THREE.MathUtils.lerp(this.rudderAngle, 0, deltaTime * 3);
+        const controlSpeed = 1.8; // 控制响应速度
+        
+        // A/D键控制偏航 (Yaw) - 方向舵
+        if (this.controls.KeyA) {
+            this.yawAngle += deltaTime * controlSpeed; // 向左偏航
+        }
+        if (this.controls.KeyD) {
+            this.yawAngle -= deltaTime * controlSpeed; // 向右偏航
         }
         
-        this.rudderGroup.rotation.y = this.rudderAngle;
-        
-        this.wingAngle = this.wingAngle || 0;
-        const wingSpeed = 2.5;
-        
-        // Wing control - Up/Down arrows control wings rotation around Z-axis
+        // 上/下箭头控制俯仰 (Pitch) - 升降舵
         if (this.controls.ArrowUp) {
-            // Up arrow: wings tilt up around Z-axis (整体向上微微转动)
-            this.wingAngle = Math.min(this.wingAngle + deltaTime * wingSpeed, Math.PI / 8);
-        } else if (this.controls.ArrowDown) {
-            // Down arrow: wings tilt down around Z-axis (整体向下微微转动)
-            this.wingAngle = Math.max(this.wingAngle - deltaTime * wingSpeed, -Math.PI / 8);
-        } else {
-            // Return wings to neutral position when no input
-            this.wingAngle = THREE.MathUtils.lerp(this.wingAngle, 0, deltaTime * 3);
+            this.pitchAngle = Math.min(this.pitchAngle + deltaTime * controlSpeed, Math.PI / 4); // 抬头
+        }
+        if (this.controls.ArrowDown) {
+            this.pitchAngle = Math.max(this.pitchAngle - deltaTime * controlSpeed, -Math.PI / 4); // 低头
         }
         
-        this.wingGroup.rotation.z = this.wingAngle;
+        // 左/右箭头直接控制偏航转向
+        if (this.controls.ArrowLeft) {
+            this.yawAngle += deltaTime * controlSpeed; // 左箭头：向左转向
+        }
+        if (this.controls.ArrowRight) {
+            this.yawAngle -= deltaTime * controlSpeed; // 右箭头：向右转向
+        }
         
-        let currentSpeed = baseSpeed * this.throttle;
+        // Q/E键控制翻滚 (Roll) - 副翼
+        if (this.controls.KeyQ) {
+            this.rollAngle = Math.max(this.rollAngle - deltaTime * controlSpeed, -Math.PI / 3); // Q键：向左翻滚
+        }
+        if (this.controls.KeyE) {
+            this.rollAngle = Math.min(this.rollAngle + deltaTime * controlSpeed, Math.PI / 3); // E键：向右翻滚
+        }
+        
+        // 自动回中 - 当没有输入时，飞机姿态逐渐回到平直飞行
+        const dampingFactor = 2.0;
+        if (!this.controls.ArrowUp && !this.controls.ArrowDown) {
+            this.pitchAngle = THREE.MathUtils.lerp(this.pitchAngle, 0, deltaTime * dampingFactor);
+        }
+        if (!this.controls.KeyQ && !this.controls.KeyE) {
+            this.rollAngle = THREE.MathUtils.lerp(this.rollAngle, 0, deltaTime * dampingFactor);
+        }
+        
+        // 应用旋转到飞机
+        this.airplane.rotation.set(this.rollAngle, this.yawAngle, this.pitchAngle);
+        
+        // 计算推力
+        let currentSpeed = baseSpeed * Math.max(this.throttle, 0); // 确保推力不为负数
+        
+        // 后燃器增强 - 在静态下也能提供推力
         if (this.afterburnerActive) {
-            currentSpeed *= 2.5;
+            if (this.throttle <= 0) {
+                // 静态下Shift键提供基础推力
+                currentSpeed = baseSpeed * 0.8; // 提供80%的基础推力
+            }
+            currentSpeed *= 3.5; // 增加后燃器效果，从2.5改为3.5
             this.afterburner.material.opacity = Math.min(this.afterburner.material.opacity + deltaTime * 10, 1);
             this.afterburner.scale.set(1 + Math.random() * 0.3, 1 + Math.random() * 0.3, 1 + Math.random() * 0.5);
         } else {
@@ -475,53 +499,49 @@ class FlightSimulator {
         
         this.propeller.rotation.x += deltaTime * 30 * this.throttle;
         
-        // Calculate base thrust direction (horizontal)
-        const forwardDirection = new THREE.Vector3(
-            Math.cos(this.airplane.rotation.y), // X component (forward/backward)
-            0,
-            -Math.sin(this.airplane.rotation.y) // Z component (left/right)
-        );
+        // 计算飞机当前朝向的推力方向（基于飞机的当前姿态）
+        const forwardDirection = new THREE.Vector3(1, 0, 0); // 飞机的前进方向是X轴正方向
+        // 按照正确的旋转顺序应用欧拉角：先偏航(Y)，再俯仰(Z)，最后翻滚(X)
+        forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
         
-        // Apply base horizontal thrust
+        // 应用推力
         force.add(forwardDirection.clone().multiplyScalar(currentSpeed));
         
-        // Wing Z-axis angle creates vertical thrust when throttle is applied
-        if (this.throttle > 0) {
-            // Wing angle directly creates vertical force
-            const verticalThrustForce = this.wingAngle * this.throttle * baseSpeed * 2.0; // Strong vertical component
-            force.y += verticalThrustForce;
+        // 基于速度的升力（只有当飞机有前进速度时才产生升力）
+        const forwardSpeed = this.velocity.dot(forwardDirection);
+        if (forwardSpeed > 5) {
+            // 升力与前进速度和俯仰角相关
+            const liftForce = forwardSpeed * 0.25 + Math.sin(this.pitchAngle) * forwardSpeed * 0.3;
+            const upDirection = new THREE.Vector3(0, 1, 0);
+            // 确保升力方向也正确应用飞机姿态
+            upDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+            force.add(upDirection.multiplyScalar(liftForce));
         }
         
-        // Realistic yaw physics based on rudder angle and speed
-        if (currentSpeed > 5) { // Only apply yaw when moving with sufficient speed
-            // Rudder angle: positive = left turn, negative = right turn
-            const yawForce = this.rudderAngle * currentSpeed * 0.02;
-            this.airplane.rotation.y += yawForce * deltaTime;
-        }
+        // 重力
+        force.y -= 15; // 稍微增加重力
         
-        // Basic lift based on speed (independent of wing angle)
-        const baseLift = Math.max(0, currentSpeed * 0.2 - 6);
-        force.y += baseLift;
-        
-        // Realistic roll physics based on wing Z-axis angle and speed  
-        if (currentSpeed > 5) {
-            const rollForce = this.wingAngle * currentSpeed * 0.015; // Reduced roll effect
-            this.airplane.rotation.z = (this.airplane.rotation.z || 0) + rollForce * deltaTime;
-        }
-        
-        force.y -= 12;
-        
-        const drag = this.velocity.clone().multiplyScalar(-1.5);
+        // 空气阻力
+        const drag = this.velocity.clone().multiplyScalar(-2.0); // 增加阻力
         force.add(drag);
         
+        // 应用力到速度
         this.velocity.add(force.clone().multiplyScalar(deltaTime));
         
+        // 更新位置
         this.airplane.position.add(this.velocity.clone().multiplyScalar(deltaTime));
         
+        // 地面碰撞检测
         if (this.airplane.position.y < 2) {
             this.airplane.position.y = 2;
             this.velocity.y = Math.max(0, this.velocity.y);
+            // 在地面时减少翻滚和俯仰
+            this.rollAngle *= 0.8;
+            this.pitchAngle = Math.max(this.pitchAngle * 0.8, 0);
         }
+        
+        // 更新控制面的视觉效果
+        this.updateControlSurfaces();
         
         this.updateUI();
         this.updateCamera();
@@ -531,6 +551,25 @@ class FlightSimulator {
         }
     }
     
+    updateControlSurfaces() {
+        // 更新方向舵视觉效果
+        if (this.rudderGroup) {
+            // 基于偏航输入显示方向舵偏转
+            let rudderDeflection = 0;
+            if (this.controls.KeyA) rudderDeflection = Math.PI / 8;
+            if (this.controls.KeyD) rudderDeflection = -Math.PI / 8;
+            this.rudderGroup.rotation.y = rudderDeflection;
+        }
+        
+        // 更新机翼视觉效果 - 显示副翼偏转
+        if (this.wingGroup) {
+            let aileronDeflection = 0;
+            if (this.controls.KeyQ) aileronDeflection = -Math.PI / 16; // Q键副翼偏转
+            if (this.controls.KeyE) aileronDeflection = Math.PI / 16; // E键副翼偏转
+            this.wingGroup.rotation.x = aileronDeflection;
+        }
+    }
+
     updateUI() {
         const speed = this.velocity.length() * 3.6;
         const altitude = Math.max(0, this.airplane.position.y);
@@ -538,6 +577,11 @@ class FlightSimulator {
         document.getElementById('speed').textContent = Math.round(speed);
         document.getElementById('altitude').textContent = Math.round(altitude);
         document.getElementById('playerCount').textContent = this.connections.size + 1;
+        
+        // 可选：显示油门值用于调试
+        if (document.getElementById('throttle')) {
+            document.getElementById('throttle').textContent = this.throttle.toFixed(2);
+        }
     }
     
     updateCamera() {
