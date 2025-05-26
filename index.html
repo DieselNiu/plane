@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Multiplayer Flight Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(180deg, #87CEEB 0%, #98FB98 100%);
+            font-family: Arial, sans-serif;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        #multiplayer {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+        }
+        
+        button:hover {
+            background: #005999;
+        }
+        
+        input {
+            padding: 5px;
+            margin: 2px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3>Flight Simulator</h3>
+        <div>Speed: <span id="speed">0</span> km/h</div>
+        <div>Altitude: <span id="altitude">0</span> m</div>
+        <div>Players: <span id="playerCount">1</span></div>
+    </div>
+    
+    <div id="controls">
+        <h4>Realistic Flight Controls:</h4>
+        <div>W - Accelerate, S - Decelerate/Reverse (on ground)</div>
+        <div>A/← - Rudder Left, D/→ - Rudder Right (turns plane when moving)</div>
+        <div>↑ - Wings Bank Up (creates vertical thrust), ↓ - Wings Bank Down</div>
+        <div>Shift - Afterburner</div>
+        <div>Mouse - Rotate Camera Around Plane</div>
+        <div>Click to Lock Mouse</div>
+        <div style="font-size: 12px; margin-top: 5px; opacity: 0.8;">
+            Note: Controls only affect airplane when moving with sufficient speed
+        </div>
+    </div>
+    
+    <div id="multiplayer">
+        <h4>Multiplayer</h4>
+        <input type="text" id="roomId" placeholder="Room ID" />
+        <button onclick="joinRoom()">Join Room</button>
+        <button onclick="createRoom()">Create Room</button>
+        <div id="connectionStatus">Offline</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
