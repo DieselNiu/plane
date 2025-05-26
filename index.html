@@ -38,17 +38,7 @@
             max-width: 300px;
         }
         
-        .multiplayer-panel {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            z-index: 100;
-            backdrop-filter: blur(5px);
-        }
+
         
         .control-group {
             margin-bottom: 10px;
@@ -108,17 +98,17 @@
         <h3>🎮 飞行控制</h3>
         <div class="control-group">
             <strong>推力控制:</strong><br>
-            <span class="control-key">W</span> 增加油门<br>
-            <span class="control-key">S</span> 减少油门<br>
-            <span class="control-key">Shift</span> 后燃器 (3.5倍推力)
+            <span class="control-key">W</span> 前进加速 (最大100%，理论速度432km/h)<br>
+            <span class="control-key">S</span> 倒退减速 (地面可倒退80%)<br>
+            <span class="control-key">Shift</span> 后燃器 (5倍推力，最高2160km/h!)
         </div>
         
         <div class="control-group">
             <strong>姿态控制:</strong><br>
             <span class="control-key">A</span> / <span class="control-key">D</span> 偏航 (左右转向)<br>
-            <span class="control-key">↑</span> / <span class="control-key">↓</span> 俯仰 (抬头/低头)<br>
+            <span class="control-key">↑</span> / <span class="control-key">↓</span> 俯仰 (抬头/低头，保持姿态)<br>
             <span class="control-key">←</span> / <span class="control-key">→</span> 直接左右转向<br>
-            <span class="control-key">Q</span> / <span class="control-key">E</span> 翻滚 (左右倾斜)
+            <span class="control-key">Q</span> / <span class="control-key">E</span> 翻滚 (自动回中)
         </div>
         
         <div class="control-group">
@@ -129,29 +119,18 @@
         
         <div style="margin-top: 10px; font-size: 12px; color: #aaa;">
             💡 飞行技巧:<br>
-            • W键加速 (推力方向跟随飞机姿态)<br>
-            • 左右箭头：直接左右转向<br>
-            • A/D键：细微调整方向<br>
-            • Q/E键：翻滚控制，用于特技飞行
+            • W键前进，S键倒退 (支持真实倒车)<br>
+            • 松开W键后依靠惯性保持速度<br>
+            • 松开上下箭头后保持俯仰姿态<br>
+            • 升力与速度相关，足够速度可维持飞行<br>
+            • 翻滚会自动回中，符合空气动力学<br>
+            • 真实物理：姿态决定飞行方向
         </div>
     </div>
     
-    <div class="multiplayer-panel">
-        <h3>🌐 多人游戏</h3>
-        <div>
-            <input type="text" id="roomId" placeholder="房间ID" style="width: 150px;">
-        </div>
-        <div style="margin-top: 10px;">
-            <button onclick="createRoom()">创建房间</button>
-            <button onclick="joinRoom()">加入房间</button>
-        </div>
-        <div id="connectionStatus" style="margin-top: 10px; font-size: 12px;">
-            未连接
-        </div>
-    </div>
+
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
