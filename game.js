@@ -320,6 +320,9 @@ class FlightSimulator {
         // 移除原有的小横幅，替换为右前方的大型广告牌
         this.createRightFrontBillboard();
         
+        // 添加右前方的悬浮挂牌（去掉热气球）
+        this.createFloatingBanner();
+        
         // 移除所有云朵
         // for (let i = 0; i < 120; i++) { ... }
     }
@@ -1029,6 +1032,235 @@ class FlightSimulator {
         console.log(`广告牌已创建在位置: (${billboardX}, 7.5, ${billboardZ}) - 飞机左前方，跑道外`);
     }
     
+    createFloatingBanner() {
+        // 飞机初始位置：(-350, 2, 0)
+        // 飞机面向正X方向（+X是前方）
+        // 右前方70米位置计算：
+        // X坐标：-350 + 70 = -280 (前方70米)
+        // Z坐标：0 - 60 = -60 (右侧60米，因为Z轴负方向是飞机的右侧)
+        
+        const bannerX = -280;
+        const bannerZ = -60;
+        const bannerHeight = 12; // 悬浮挂牌高度 - 降低到更合适的高度
+        
+        // 创建悬浮挂牌组
+        const bannerGroup = new THREE.Group();
+        
+        // 直接创建悬浮的挂牌，不需要气球
+        this.createFloatingBannerContent(bannerGroup, bannerHeight, bannerX);
+        
+        // 设置挂牌组的位置
+        bannerGroup.position.set(bannerX, 0, bannerZ);
+        
+        // 添加轻微的悬浮动画
+        this.bannerGroup = bannerGroup;
+        this.bannerSwayTime = 0;
+        
+        // 添加到场景
+        this.scene.add(bannerGroup);
+        
+        console.log(`悬浮Cursor挂牌已创建在位置: (${bannerX}, ${bannerHeight}, ${bannerZ}) - 飞机右前方，跑道外`);
+    }
+    
+    createFloatingBannerContent(bannerGroup, bannerHeight, bannerX) {
+        // 使用THREE.TextureLoader直接加载image.png文件
+        const textureLoader = new THREE.TextureLoader();
+        
+        textureLoader.load(
+            './image.png', // 加载当前目录下的 image.png
+            (bannerTexture) => {
+                // 纹理加载成功
+                bannerTexture.generateMipmaps = false;
+                bannerTexture.minFilter = THREE.LinearFilter;
+                bannerTexture.magFilter = THREE.LinearFilter;
+                
+                // 创建横幅几何体 - 根据image.png的实际比例调整
+                // 假设image.png是横向的，创建合适比例的横幅
+                const bannerGeometry = new THREE.PlaneGeometry(16, 6); // 16米宽，6米高，适合挂牌显示
+                
+                // 创建横幅材质
+                const bannerMaterial = new THREE.MeshBasicMaterial({ 
+                    map: bannerTexture,
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    opacity: 1.0 // 完全不透明，确保图片清晰
+                });
+                
+                // 创建悬浮挂牌网格
+                const banner = new THREE.Mesh(bannerGeometry, bannerMaterial);
+                banner.position.set(0, bannerHeight, 0); // 直接悬浮在设定高度
+                
+                // 让挂牌朝向飞机方向以便观看
+                banner.lookAt(bannerX, bannerHeight, 0);
+                
+                // 添加到挂牌组
+                bannerGroup.add(banner);
+                
+                console.log('image.png 已成功加载并显示在悬浮挂牌上！');
+            },
+            (progress) => {
+                // 加载进度
+                console.log(`正在加载横幅图片 image.png... ${Math.round((progress.loaded / progress.total * 100))}%`);
+            },
+            (error) => {
+                // 加载失败，创建备用横幅
+                console.error('无法加载 image.png 用于横幅:', error);
+                console.log('创建备用横幅显示...');
+                this.createFallbackBanner(bannerGroup, bannerHeight, bannerX);
+            }
+        );
+    }
+    
+    createFallbackBanner(bannerGroup, bannerHeight, bannerX) {
+        // 备用方案：如果image.png加载失败，创建错误提示挂牌
+        const bannerCanvas = document.createElement('canvas');
+        bannerCanvas.width = 800;
+        bannerCanvas.height = 300;
+        const bannerContext = bannerCanvas.getContext('2d');
+        
+        // 白色背景
+        bannerContext.fillStyle = '#ffffff';
+        bannerContext.fillRect(0, 0, 800, 300);
+        
+        // 红色边框
+        bannerContext.strokeStyle = '#ff0000';
+        bannerContext.lineWidth = 8;
+        bannerContext.strokeRect(4, 4, 792, 292);
+        
+        // 错误信息文字
+        bannerContext.fillStyle = '#ff0000';
+        bannerContext.font = 'bold 60px Arial, sans-serif';
+        bannerContext.textAlign = 'center';
+        bannerContext.fillText('IMAGE.PNG', 400, 120);
+        bannerContext.fillText('NOT FOUND', 400, 200);
+        
+        bannerContext.fillStyle = '#666666';
+        bannerContext.font = '30px Arial, sans-serif';
+        bannerContext.fillText('请检查文件是否存在', 400, 250);
+        
+        // 创建备用横幅纹理
+        const bannerTexture = new THREE.CanvasTexture(bannerCanvas);
+        bannerTexture.generateMipmaps = false;
+        bannerTexture.minFilter = THREE.LinearFilter;
+        bannerTexture.magFilter = THREE.LinearFilter;
+        
+        // 创建横幅
+        const bannerGeometry = new THREE.PlaneGeometry(16, 6);
+        const bannerMaterial = new THREE.MeshBasicMaterial({ 
+            map: bannerTexture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        
+        const banner = new THREE.Mesh(bannerGeometry, bannerMaterial);
+        banner.position.set(0, bannerHeight, 0); // 直接悬浮在设定高度
+        banner.lookAt(bannerX, bannerHeight, 0);
+        
+        bannerGroup.add(banner);
+        
+        console.log('备用悬浮挂牌已创建，显示错误信息');
+    }
+    
+    addDecalToBalloon(balloon, balloonGroup, balloonHeight) {
+        // 直接加载 image.png 文件作为贴花纹理
+        const textureLoader = new THREE.TextureLoader();
+        
+        // 加载实际的 image.png 文件
+        textureLoader.load(
+            './image.png', // 加载当前目录下的 image.png
+            (decalTexture) => {
+                // 纹理加载成功
+                decalTexture.generateMipmaps = false;
+                decalTexture.minFilter = THREE.LinearFilter;
+                decalTexture.magFilter = THREE.LinearFilter;
+                
+                // 创建贴花材质
+                this.createDecalMesh(decalTexture, balloon, balloonGroup, balloonHeight);
+                
+                console.log('image.png 已成功加载并应用到气球表面！');
+            },
+            (progress) => {
+                // 加载进度
+                console.log(`正在加载 image.png... ${(progress.loaded / progress.total * 100)}%`);
+            },
+            (error) => {
+                // 加载失败，使用备用方案
+                console.error('无法加载 image.png:', error);
+                console.log('使用备用的canvas绘制方案...');
+                this.createFallbackDecal(balloon, balloonGroup, balloonHeight);
+            }
+        );
+    }
+    
+    createDecalMesh(decalTexture, balloon, balloonGroup, balloonHeight) {
+        // 创建贴花材质 - 开启透明，关闭深度写入
+        const decalMaterial = new THREE.MeshBasicMaterial({
+            map: decalTexture,
+            transparent: true,
+            depthWrite: false, // 关闭深度写入
+            depthTest: true,
+            side: THREE.DoubleSide,
+            opacity: 0.95
+        });
+        
+        // 计算气球表面的正确位置
+        const balloonRadius = 10; // 增加半径以适应椭圆形状
+        
+        // 计算朝向飞机的方向向量
+        const balloonWorldPos = new THREE.Vector3(-280, balloonHeight, -60);
+        const airplanePos = new THREE.Vector3(-350, 2, 0);
+        const directionToPlane = new THREE.Vector3().subVectors(airplanePos, balloonWorldPos).normalize();
+        
+        // 在气球局部坐标系中，贴花位置应该在球面上朝向飞机的方向
+        const decalLocalPosition = directionToPlane.clone().multiplyScalar(balloonRadius + 0.1);
+        
+        // 根据实际image.png的尺寸调整贴花大小
+        // 假设是方形或横向矩形，调整为合适的尺寸
+        const decalGeometry = new THREE.PlaneGeometry(12, 8); // 加大尺寸以确保清晰可见
+        const decalMesh = new THREE.Mesh(decalGeometry, decalMaterial);
+        
+        // 设置贴花位置（相对于气球中心）
+        decalMesh.position.copy(decalLocalPosition);
+        
+        // 让贴花朝向气球中心的反方向（即朝外）
+        const balloonCenter = new THREE.Vector3(0, balloonHeight, 0);
+        decalMesh.lookAt(balloonCenter.clone().add(directionToPlane.clone().multiplyScalar(100)));
+        
+        balloonGroup.add(decalMesh);
+        
+        console.log('image.png 贴花已成功添加到气球表面');
+    }
+    
+    createFallbackDecal(balloon, balloonGroup, balloonHeight) {
+        // 备用方案：创建贴花纹理 - 如果无法加载 image.png 则使用此方案
+        const decalCanvas = document.createElement('canvas');
+        decalCanvas.width = 256;
+        decalCanvas.height = 256;
+        const decalContext = decalCanvas.getContext('2d');
+        
+        // 透明背景
+        decalContext.clearRect(0, 0, 256, 256);
+        
+        // 绘制简单的 "IMAGE.PNG" 文字提示
+        decalContext.fillStyle = '#ffffff';
+        decalContext.fillRect(20, 100, 216, 56);
+        
+        decalContext.fillStyle = '#ff0000';
+        decalContext.font = 'bold 24px Arial, sans-serif';
+        decalContext.textAlign = 'center';
+        decalContext.fillText('IMAGE.PNG', 128, 130);
+        decalContext.fillText('NOT FOUND', 128, 150);
+        
+        // 创建贴花纹理
+        const decalTexture = new THREE.CanvasTexture(decalCanvas);
+        decalTexture.generateMipmaps = false;
+        decalTexture.minFilter = THREE.LinearFilter;
+        decalTexture.magFilter = THREE.LinearFilter;
+        
+        // 使用备用纹理创建贴花
+        this.createDecalMesh(decalTexture, balloon, balloonGroup, balloonHeight);
+    }
+    
     createWaterNormalMap() {
         // 创建程序化水面法线贴图
         const size = 256;
@@ -1578,6 +1810,18 @@ class FlightSimulator {
         if (this.waterMaterial) {
             this.waterMaterial.uniforms.time.value += deltaTime;
             this.updateWaterReflection();
+        }
+        
+        // 更新悬浮挂牌动画
+        if (this.bannerGroup) {
+            this.bannerSwayTime += deltaTime;
+            const swayX = Math.sin(this.bannerSwayTime * 0.6) * 0.3;
+            const swayZ = Math.cos(this.bannerSwayTime * 0.8) * 0.2;
+            const swayY = Math.sin(this.bannerSwayTime * 1.0) * 0.5;
+            
+            this.bannerGroup.rotation.x = swayX * 0.03;
+            this.bannerGroup.rotation.z = swayZ * 0.03;
+            this.bannerGroup.position.y = swayY;
         }
         
         this.renderer.render(this.scene, this.camera);
