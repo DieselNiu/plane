@@ -956,12 +956,12 @@ class FlightSimulator {
         // 飞机初始位置：(-350, 2, 0)
         // 飞机面向正X方向（+X是前方）
         // 跑道宽度：80米，所以跑道范围是Z: -40 到 +40
-        // 右前方20米且在跑道外的位置计算：
-        // X坐标：-350 + 20 = -330 (前方20米)
-        // Z坐标：0 - 60 = -60 (右侧60米，确保在跑道外，因为Z轴负方向是飞机的右侧)
+        // 左前方70米且在跑道外的位置计算：
+        // X坐标：-350 + 70 = -280 (前方70米)
+        // Z坐标：0 + 60 = +60 (左侧60米，确保在跑道外，因为Z轴正方向是飞机的左侧)
         
-        const billboardX = -330;
-        const billboardZ = -60; // 调整到跑道外右侧
+        const billboardX = -280;
+        const billboardZ = 60; // 调整到跑道外左侧
         
         // 创建文字纹理
         const canvas = document.createElement('canvas');
@@ -1026,7 +1026,7 @@ class FlightSimulator {
         // 添加到场景
         this.scene.add(billboard);
         
-        console.log(`广告牌已创建在位置: (${billboardX}, 7.5, ${billboardZ}) - 飞机右前方，跑道外`);
+        console.log(`广告牌已创建在位置: (${billboardX}, 7.5, ${billboardZ}) - 飞机左前方，跑道外`);
     }
     
     createWaterNormalMap() {
@@ -1139,8 +1139,8 @@ class FlightSimulator {
     setupCamera() {
         this.cameraDistance = 25;
         this.cameraHeight = 8;
-        // Set camera rotation to be behind airplane (negative X direction)
-        this.cameraRotation = { x: 0, y: -Math.PI/2 }; // -90° puts camera behind airplane on X-axis
+        // Set camera rotation to be behind airplane, looking forward along airplane direction
+        this.cameraRotation = { x: 0, y: 0 }; // 0° puts camera behind airplane looking in +X direction (airplane's forward direction)
         // Initial position will be calculated by updateCamera()
     }
     
@@ -1451,13 +1451,14 @@ class FlightSimulator {
     updateCamera() {
         // 自动跟随飞机偏航方向 + 鼠标控制的微调
         const airplaneYaw = this.yawAngle || 0;
-        const mouseYawOffset = this.cameraRotation.y + Math.PI/2; // 鼠标偏移（相对于飞机后方）
+        const mouseYawOffset = this.cameraRotation.y; // 鼠标偏移（相对于飞机后方）
         const totalYaw = airplaneYaw + mouseYawOffset; // 飞机偏航 + 鼠标控制
         
+        // 摄像机位置在飞机后方，沿着飞机方向
         const cameraOffset = new THREE.Vector3(
-            Math.sin(totalYaw) * Math.cos(this.cameraRotation.x) * this.cameraDistance,
+            -Math.cos(totalYaw) * Math.cos(this.cameraRotation.x) * this.cameraDistance, // 后方（-X方向相对于飞机朝向）
             Math.sin(this.cameraRotation.x) * this.cameraDistance + this.cameraHeight,
-            Math.cos(totalYaw) * Math.cos(this.cameraRotation.x) * this.cameraDistance
+            -Math.sin(totalYaw) * Math.cos(this.cameraRotation.x) * this.cameraDistance
         );
         
         const targetPosition = this.airplane.position.clone().add(cameraOffset);
