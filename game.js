@@ -17,9 +17,22 @@ class FlightSimulator {
         this.connections = new Map();
         this.roomId = null;
         
+        // 固定随机种子以确保场景一致性
+        this.seed = 12345;
+        this.rng = this.createSeededRandom(this.seed);
+        
         this.init();
         this.setupControls();
         this.animate();
+    }
+    
+    // 创建带种子的随机数生成器
+    createSeededRandom(initialSeed) {
+        let seed = initialSeed;
+        return () => {
+            seed = (seed * 9301 + 49297) % 233280;
+            return seed / 233280;
+        };
     }
     
     init() {
@@ -245,11 +258,11 @@ class FlightSimulator {
             const treeMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
             const tree = new THREE.Mesh(treeGeometry, treeMaterial);
             
-            const side = Math.random() > 0.5 ? 1 : -1;
+            const side = this.rng() > 0.5 ? 1 : -1;
             tree.position.set(
-                Math.random() * 400 - 200,
+                this.rng() * 400 - 200,
                 10,
-                side * (Math.random() * 30 + 25)
+                side * (this.rng() * 30 + 25)
             );
             tree.castShadow = true;
             this.scene.add(tree);
@@ -257,22 +270,22 @@ class FlightSimulator {
         
         // Create more colorful buildings
         for (let i = 0; i < 25; i++) {
-            const buildingWidth = Math.random() * 30 + 15;
-            const buildingHeight = Math.random() * 100 + 40;
-            const buildingDepth = Math.random() * 30 + 15;
+            const buildingWidth = this.rng() * 30 + 15;
+            const buildingHeight = this.rng() * 100 + 40;
+            const buildingDepth = this.rng() * 30 + 15;
             
             const buildingGeometry = new THREE.BoxGeometry(buildingWidth, buildingHeight, buildingDepth);
             // More vibrant and varied colors
-            const hue = Math.random(); // Full hue range
-            const saturation = Math.random() * 0.6 + 0.4; // Higher saturation
-            const lightness = Math.random() * 0.3 + 0.4; // Good brightness range
+            const hue = this.rng(); // Full hue range
+            const saturation = this.rng() * 0.6 + 0.4; // Higher saturation
+            const lightness = this.rng() * 0.3 + 0.4; // Good brightness range
             const buildingMaterial = new THREE.MeshLambertMaterial({ 
                 color: new THREE.Color().setHSL(hue, saturation, lightness) 
             });
             const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
             
-            const angle = Math.random() * Math.PI * 2;
-            const distance = Math.random() * 500 + 100;
+            const angle = this.rng() * Math.PI * 2;
+            const distance = this.rng() * 500 + 100;
             building.position.set(
                 Math.cos(angle) * distance,
                 buildingHeight / 2,
@@ -284,22 +297,22 @@ class FlightSimulator {
         
         // Create multiple colorful hot air balloons
         for (let i = 0; i < 6; i++) {
-            const balloonRadius = Math.random() * 4 + 6;
+            const balloonRadius = this.rng() * 4 + 6;
             const balloonGeometry = new THREE.SphereGeometry(balloonRadius, 16, 12);
             
             // Create vibrant balloon colors
-            const hue = Math.random();
-            const saturation = Math.random() * 0.4 + 0.6; // High saturation
-            const lightness = Math.random() * 0.3 + 0.5; // Good brightness
+            const hue = this.rng();
+            const saturation = this.rng() * 0.4 + 0.6; // High saturation
+            const lightness = this.rng() * 0.3 + 0.5; // Good brightness
             const balloonMaterial = new THREE.MeshLambertMaterial({ 
                 color: new THREE.Color().setHSL(hue, saturation, lightness) 
             });
             const balloon = new THREE.Mesh(balloonGeometry, balloonMaterial);
             
             // Position balloons around the scene
-            const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
-            const distance = Math.random() * 200 + 150;
-            const height = Math.random() * 50 + 40;
+            const angle = (i / 6) * Math.PI * 2 + this.rng() * 0.5;
+            const distance = this.rng() * 200 + 150;
+            const height = this.rng() * 50 + 40;
             balloon.position.set(
                 Math.cos(angle) * distance,
                 height,
@@ -359,7 +372,7 @@ class FlightSimulator {
         
         for (let i = 0; i < 50; i++) {
             const cloudGeometry = new THREE.SphereGeometry(
-                Math.random() * 10 + 5,
+                this.rng() * 10 + 5,
                 8,
                 6
             );
@@ -370,9 +383,9 @@ class FlightSimulator {
             });
             const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
             cloud.position.set(
-                (Math.random() - 0.5) * 1000,
-                Math.random() * 200 + 100,
-                (Math.random() - 0.5) * 1000
+                (this.rng() - 0.5) * 1000,
+                this.rng() * 200 + 100,
+                (this.rng() - 0.5) * 1000
             );
             this.scene.add(cloud);
         }
@@ -491,7 +504,7 @@ class FlightSimulator {
             }
             currentSpeed *= 3.5; // 增加后燃器效果，从2.5改为3.5
             this.afterburner.material.opacity = Math.min(this.afterburner.material.opacity + deltaTime * 10, 1);
-            this.afterburner.scale.set(1 + Math.random() * 0.3, 1 + Math.random() * 0.3, 1 + Math.random() * 0.5);
+            this.afterburner.scale.set(1 + this.rng() * 0.3, 1 + this.rng() * 0.3, 1 + this.rng() * 0.5);
         } else {
             this.afterburner.material.opacity = Math.max(this.afterburner.material.opacity - deltaTime * 5, 0);
             this.afterburner.scale.set(1, 1, 1);
