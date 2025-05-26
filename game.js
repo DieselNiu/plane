@@ -21,7 +21,8 @@ class FlightSimulator {
         this.otherPlayers = new Map();
         this.peer = null;
         this.connections = new Map();
-        this.roomId = null;
+        this.globalRoomId = 'flight-simulator-global-room'; // 全局房间ID
+        this.isHost = false;
         
         // 固定随机种子以确保场景一致性
         this.seed = 12345;
@@ -54,6 +55,7 @@ class FlightSimulator {
         this.createAirplane();
         this.createEnvironment();
         this.setupCamera();
+        this.initMultiplayer(); // 自动初始化多人游戏
         
         window.addEventListener('resize', () => this.onWindowResize());
     }
@@ -1850,46 +1852,69 @@ class FlightSimulator {
         this.camera.lookAt(this.airplane.position);
     }
     
-    createRoom() {
-        if (!this.peer) {
-            this.peer = new Peer();
-            this.peer.on('open', (id) => {
-                this.roomId = id;
-                document.getElementById('roomId').value = id;
-                document.getElementById('connectionStatus').textContent = `Hosting: ${id}`;
-                this.setupPeerListeners();
-            });
-        }
-    }
-    
-    joinRoom() {
-        const roomId = document.getElementById('roomId').value;
-        if (!roomId) return;
+    initMultiplayer() {
+        // 自动初始化P2P连接，所有用户进入同一个全局房间
+        this.peer = new Peer();
         
-        if (!this.peer) {
-            this.peer = new Peer();
-            this.peer.on('open', () => {
-                this.connectToRoom(roomId);
-                this.setupPeerListeners();
-            });
-        } else {
-            this.connectToRoom(roomId);
-        }
+        this.peer.on('open', (id) => {
+            console.log('我的PeerJS ID:', id);
+            document.getElementById('connectionStatus').textContent = '正在加入全局房间...';
+            this.setupPeerListeners();
+            // 延迟一下尝试连接到全局房间，给其他用户时间初始化
+            setTimeout(() => this.tryConnectToGlobalRoom(), 1000);
+        });
+        
+        this.peer.on('error', (error) => {
+            console.log('PeerJS连接错误:', error);
+        });
     }
     
-    connectToRoom(roomId) {
-        const conn = this.peer.connect(roomId);
+    tryConnectToGlobalRoom() {
+        // 尝试连接到全局房间ID
+        const conn = this.peer.connect(this.globalRoomId);
+        
         conn.on('open', () => {
-            document.getElementById('connectionStatus').textContent = `Connected to: ${roomId}`;
-            this.connections.set(roomId, conn);
-            this.setupConnectionListeners(conn, roomId);
+            console.log('成功连接到全局房间');
+            document.getElementById('connectionStatus').textContent = '已连接到全局房间';
+            this.connections.set(this.globalRoomId, conn);
+            this.setupConnectionListeners(conn, this.globalRoomId);
+        });
+        
+        conn.on('error', (error) => {
+            console.log('连接全局房间失败，可能是第一个进入的用户:', error);
+            // 如果连接失败，说明我们是第一个用户，成为房间主机
+            this.becomeHost();
+        });
+    }
+    
+    becomeHost() {
+        // 成为房间主机，等待其他用户连接
+        this.isHost = true;
+        this.peer.destroy();
+        
+        // 使用固定的房间ID重新创建peer
+        this.peer = new Peer(this.globalRoomId);
+        
+        this.peer.on('open', (id) => {
+            console.log('成为房间主机，房间ID:', id);
+            document.getElementById('connectionStatus').textContent = '房间主机 - 等待其他玩家';
+            this.setupPeerListeners();
+        });
+        
+        this.peer.on('error', (error) => {
+            console.log('主机创建错误:', error);
         });
     }
     
     setupPeerListeners() {
         this.peer.on('connection', (conn) => {
+            console.log('新玩家加入:', conn.peer);
             this.connections.set(conn.peer, conn);
             this.setupConnectionListeners(conn, conn.peer);
+            // 更新连接状态显示
+            if (this.isHost) {
+                document.getElementById('connectionStatus').textContent = `房间主机 - ${this.connections.size + 1}名玩家`;
+            }
         });
     }
     
@@ -1901,8 +1926,13 @@ class FlightSimulator {
         });
         
         conn.on('close', () => {
+            console.log('玩家离开:', peerId);
             this.connections.delete(peerId);
             this.removeOtherPlayer(peerId);
+            // 更新连接状态显示
+            if (this.isHost) {
+                document.getElementById('connectionStatus').textContent = `房间主机 - ${this.connections.size + 1}名玩家`;
+            }
         });
     }
     
@@ -2016,12 +2046,6 @@ class FlightSimulator {
     }
 }
 
-function createRoom() {
-    game.createRoom();
-}
-
-function joinRoom() {
-    game.joinRoom();
-}
+// 移除手动房间管理函数，现在自动加入全局房间
 
 const game = new FlightSimulator();
