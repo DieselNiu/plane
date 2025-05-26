@@ -40,6 +40,8 @@ class FlightSimulator {
         this.renderer.setClearColor(0x87CEEB);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // 设置色彩空间以确保颜色正确显示
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         document.body.appendChild(this.renderer.domElement);
         
         this.setupLighting();
@@ -315,27 +317,8 @@ class FlightSimulator {
         // 移除所有热气球
         // for (let i = 0; i < 12; i++) { ... }
         
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 128;
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, 256, 128);
-        context.fillStyle = '#ff0000';
-        context.font = 'bold 32px Arial';
-        context.textAlign = 'center';
-        context.fillText('生财有术', 128, 70);
-        
-        const textTexture = new THREE.CanvasTexture(canvas);
-        const bannerGeometry = new THREE.PlaneGeometry(6, 3);
-        const bannerMaterial = new THREE.MeshLambertMaterial({ 
-            map: textTexture,
-            transparent: true
-        });
-        const banner = new THREE.Mesh(bannerGeometry, bannerMaterial);
-        banner.position.set(100, 45, 72);
-        banner.lookAt(0, 45, 0);
-        this.scene.add(banner);
+        // 移除原有的小横幅，替换为右前方的大型广告牌
+        this.createRightFrontBillboard();
         
         // 移除所有云朵
         // for (let i = 0; i < 120; i++) { ... }
@@ -967,6 +950,83 @@ class FlightSimulator {
         
         // 创建湖泊周围的装饰
         this.createLakeDecorations(lakeX, lakeZ, lakeRadius);
+    }
+    
+    createRightFrontBillboard() {
+        // 飞机初始位置：(-350, 2, 0)
+        // 飞机面向正X方向（+X是前方）
+        // 跑道宽度：80米，所以跑道范围是Z: -40 到 +40
+        // 右前方20米且在跑道外的位置计算：
+        // X坐标：-350 + 20 = -330 (前方20米)
+        // Z坐标：0 - 60 = -60 (右侧60米，确保在跑道外，因为Z轴负方向是飞机的右侧)
+        
+        const billboardX = -330;
+        const billboardZ = -60; // 调整到跑道外右侧
+        
+        // 创建文字纹理
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024; // 增大画布以获得更清晰的文字
+        canvas.height = 512;
+        const context = canvas.getContext('2d');
+        
+        // 深青绿色背景 - 使用更饱和的颜色
+        context.fillStyle = '#03665A';
+        context.fillRect(0, 0, 1024, 512);
+        
+        // 添加细微的边框以突出背景
+        context.strokeStyle = '#025a4f';
+        context.lineWidth = 6;
+        context.strokeRect(3, 3, 1018, 506);
+        
+        // 设置文字样式 - 纯白色字体确保在深色背景上清晰
+        context.fillStyle = '#ffffff'; // 纯白色文字
+        context.font = 'bold 140px SimHei, "Microsoft YaHei", "PingFang SC", Arial, sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        
+        // 添加文字阴影效果增强可读性
+        context.shadowColor = 'rgba(0,0,0,0.5)';
+        context.shadowBlur = 6;
+        context.shadowOffsetX = 2;
+        context.shadowOffsetY = 2;
+        
+        // 绘制"生财有术"文字
+        context.fillText('生财有术', 512, 256);
+        
+        // 创建纹理
+        const textTexture = new THREE.CanvasTexture(canvas);
+        textTexture.generateMipmaps = false;
+        textTexture.minFilter = THREE.LinearFilter;
+        textTexture.magFilter = THREE.LinearFilter;
+        
+        // 创建广告牌几何体 - 足够大的矩形面片
+        const billboardGeometry = new THREE.PlaneGeometry(30, 15); // 30米宽，15米高
+        
+        // 创建深青绿色材质并应用文字纹理 - 使用不受光照影响的材质
+        const billboardMaterial = new THREE.MeshBasicMaterial({ 
+            map: textTexture,
+            transparent: false, // 关闭透明度确保背景显示
+            side: THREE.DoubleSide, // 双面显示确保从各个角度都能看到
+            color: 0xffffff // 保持白色以不影响纹理颜色
+        });
+        
+        // 创建广告牌网格
+        const billboard = new THREE.Mesh(billboardGeometry, billboardMaterial);
+        
+        // 设置位置 - 下缘与地面齐平
+        billboard.position.set(billboardX, 7.5, billboardZ); // Y = 15/2 = 7.5，使下缘贴地
+        
+        // 让广告牌朝向飞机初始位置
+        billboard.lookAt(-350, 7.5, 0);
+        
+        // 投射阴影
+        billboard.castShadow = true;
+        billboard.receiveShadow = true;
+        
+        // 添加到场景
+        this.scene.add(billboard);
+        
+        console.log(`广告牌已创建在位置: (${billboardX}, 7.5, ${billboardZ}) - 飞机右前方，跑道外`);
     }
     
     createWaterNormalMap() {
