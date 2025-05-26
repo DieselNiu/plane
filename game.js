@@ -12,6 +12,12 @@ class FlightSimulator {
         this.afterburnerActive = false;
         this.controls = {};
         
+        // 移动端控制器状态
+        this.mobileControls = {
+            leftJoystick: { x: 0, y: 0, active: false },
+            rightJoystick: { x: 0, y: 0, active: false }
+        };
+        
         this.otherPlayers = new Map();
         this.peer = null;
         this.connections = new Map();
@@ -1397,6 +1403,110 @@ class FlightSimulator {
         this.renderer.domElement.addEventListener('click', () => {
             this.renderer.domElement.requestPointerLock();
         });
+        
+        // 设置移动端触摸控制器
+        this.setupMobileControls();
+    }
+    
+    setupMobileControls() {
+        const leftJoystick = document.getElementById('leftJoystick');
+        const rightJoystick = document.getElementById('rightJoystick');
+        const leftKnob = document.getElementById('leftKnob');
+        const rightKnob = document.getElementById('rightKnob');
+        
+        if (!leftJoystick || !rightJoystick) return;
+        
+        // 摇杆配置
+        const joystickRadius = 40; // 摇杆可移动半径
+        
+        // 处理触摸事件的通用函数
+        const handleTouch = (joystick, knob, controlKey, event) => {
+            event.preventDefault();
+            
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            let touch = event.touches ? event.touches[0] : event;
+            if (event.type.includes('end') || event.type.includes('cancel')) {
+                // 释放摇杆
+                this.mobileControls[controlKey] = { x: 0, y: 0, active: false };
+                knob.style.transform = 'translate(-50%, -50%)';
+                return;
+            }
+            
+            // 计算触摸相对于摇杆中心的位置
+            const touchX = touch.clientX - rect.left - centerX;
+            const touchY = touch.clientY - rect.top - centerY;
+            
+            // 计算距离和角度
+            const distance = Math.sqrt(touchX * touchX + touchY * touchY);
+            const angle = Math.atan2(touchY, touchX);
+            
+            // 限制在摇杆范围内
+            const clampedDistance = Math.min(distance, joystickRadius);
+            const clampedX = Math.cos(angle) * clampedDistance;
+            const clampedY = Math.sin(angle) * clampedDistance;
+            
+            // 更新摇杆按钮位置
+            knob.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
+            
+            // 更新控制状态 (-1 到 1 的范围)
+            this.mobileControls[controlKey] = {
+                x: clampedX / joystickRadius,
+                y: -clampedY / joystickRadius, // Y轴反转，向上为正
+                active: true
+            };
+        };
+        
+        // 左摇杆事件（飞行控制：俯仰和翻滚）
+        ['touchstart', 'touchmove', 'mousedown', 'mousemove'].forEach(eventType => {
+            leftJoystick.addEventListener(eventType, (event) => {
+                if ((eventType.includes('mouse') && event.buttons === 1) || eventType.includes('touch')) {
+                    handleTouch(leftJoystick, leftKnob, 'leftJoystick', event);
+                }
+            });
+        });
+        
+        ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(eventType => {
+            leftJoystick.addEventListener(eventType, (event) => {
+                handleTouch(leftJoystick, leftKnob, 'leftJoystick', event);
+            });
+        });
+        
+        // 右摇杆事件（推力和转向）
+        ['touchstart', 'touchmove', 'mousedown', 'mousemove'].forEach(eventType => {
+            rightJoystick.addEventListener(eventType, (event) => {
+                if ((eventType.includes('mouse') && event.buttons === 1) || eventType.includes('touch')) {
+                    handleTouch(rightJoystick, rightKnob, 'rightJoystick', event);
+                }
+            });
+        });
+        
+        ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(eventType => {
+            rightJoystick.addEventListener(eventType, (event) => {
+                handleTouch(rightJoystick, rightKnob, 'rightJoystick', event);
+            });
+        });
+        
+        // 禁用移动端滚动和缩放
+        document.addEventListener('touchmove', (event) => {
+            if (event.target.closest('.joystick')) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.addEventListener('gesturestart', (event) => {
+            event.preventDefault();
+        });
+        
+        document.addEventListener('gesturechange', (event) => {
+            event.preventDefault();
+        });
+        
+        document.addEventListener('gestureend', (event) => {
+            event.preventDefault();
+        });
     }
     
     updatePhysics(deltaTime) {
@@ -1404,6 +1514,10 @@ class FlightSimulator {
         const baseSpeed = 120; // 大幅增加基础速度！！！
         
         this.afterburnerActive = this.controls.ShiftLeft || this.controls.ShiftRight;
+        
+        // 集成移动端摇杆控制
+        const leftJoy = this.mobileControls.leftJoystick;
+        const rightJoy = this.mobileControls.rightJoystick;
         
         // 油门响应 - 改进的前进/倒退控制
         if (this.controls.KeyW) {
@@ -1419,8 +1533,28 @@ class FlightSimulator {
             }
         }
         
-        // 松开W/S键时的油门处理
-        if (!this.controls.KeyW && !this.controls.KeyS) {
+        // 右摇杆Y轴直接控制推力（移动端）
+        if (rightJoy.active && Math.abs(rightJoy.y) > 0.1) {
+            // 右摇杆向上推：增加推力，向下拉：减少推力/倒退
+            const targetThrottle = rightJoy.y; // 直接映射到 -1 到 1
+            if (this.airplane.position.y <= 2.5) {
+                // 地面：允许全范围推力包括倒退
+                this.throttle = Math.max(-0.8, Math.min(1.0, targetThrottle));
+            } else {
+                // 空中：限制倒退推力
+                this.throttle = Math.max(-0.3, Math.min(1.0, targetThrottle));
+            }
+        }
+        
+        // 移动端后燃器控制：右摇杆推到极限位置
+        if (rightJoy.active && rightJoy.y > 0.9) {
+            this.afterburnerActive = true;
+        } else if (rightJoy.active && rightJoy.y <= 0.9) {
+            this.afterburnerActive = this.controls.ShiftLeft || this.controls.ShiftRight;
+        }
+        
+        // 松开W/S键时的油门处理（仅当移动端摇杆未激活时）
+        if (!this.controls.KeyW && !this.controls.KeyS && !rightJoy.active) {
             if (this.airplane.position.y <= 2.5) {
                 // 在地面时，油门自动回到0（怠速）
                 if (this.throttle > 0) {
@@ -1453,12 +1587,23 @@ class FlightSimulator {
             this.yawAngle -= deltaTime * controlSpeed; // 向右偏航
         }
         
+        // 右摇杆X轴控制偏航转向（移动端）
+        if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
+            this.yawAngle -= rightJoy.x * deltaTime * controlSpeed * 1.5; // 右摇杆左右控制转向
+        }
+        
         // 上/下箭头控制俯仰 (Pitch) - 升降舵
         if (this.controls.ArrowUp) {
             this.pitchAngle = Math.min(this.pitchAngle + deltaTime * controlSpeed, Math.PI / 4); // 抬头
         }
         if (this.controls.ArrowDown) {
             this.pitchAngle = Math.max(this.pitchAngle - deltaTime * controlSpeed, -Math.PI / 4); // 低头
+        }
+        
+        // 左摇杆Y轴控制俯仰（移动端）
+        if (leftJoy.active && Math.abs(leftJoy.y) > 0.1) {
+            const targetPitch = leftJoy.y * Math.PI / 4; // 摇杆控制目标俯仰角
+            this.pitchAngle = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, targetPitch));
         }
         
         // 左/右箭头直接控制偏航转向
@@ -1477,16 +1622,22 @@ class FlightSimulator {
             this.rollAngle = Math.min(this.rollAngle + deltaTime * controlSpeed, Math.PI / 3); // E键：向右翻滚
         }
         
+        // 左摇杆X轴控制翻滚（移动端）
+        if (leftJoy.active && Math.abs(leftJoy.x) > 0.1) {
+            const targetRoll = -leftJoy.x * Math.PI / 3; // 摇杆控制目标翻滚角，负号为了符合直觉
+            this.rollAngle = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRoll));
+        }
+        
         // 翻滚角自动回中（符合物理学），但俯仰角保持不变
         const dampingFactor = 2.0;
         
-        // 俯仰角不自动回中 - 保持当前姿态，符合真实飞行物理学
-        // if (!this.controls.ArrowUp && !this.controls.ArrowDown) {
-        //     this.pitchAngle = THREE.MathUtils.lerp(this.pitchAngle, 0, deltaTime * dampingFactor);
-        // }
+        // 俯仰角处理：移动端直接设置，键盘控制时保持
+        if (!leftJoy.active && !this.controls.ArrowUp && !this.controls.ArrowDown) {
+            // 仅在移动端未激活且键盘未按下时，俯仰角可以保持当前状态
+        }
         
-        // 翻滚角自动回中 - 符合空气动力学稳定性
-        if (!this.controls.KeyQ && !this.controls.KeyE) {
+        // 翻滚角自动回中 - 符合空气动力学稳定性（仅当无控制输入时）
+        if (!this.controls.KeyQ && !this.controls.KeyE && !leftJoy.active) {
             this.rollAngle = THREE.MathUtils.lerp(this.rollAngle, 0, deltaTime * dampingFactor);
         }
         

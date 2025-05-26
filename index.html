@@ -11,18 +11,32 @@
             overflow: hidden;
             background: #000;
             font-family: 'Arial', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
         
         .ui-panel {
             position: absolute;
             top: 10px;
             left: 10px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
             z-index: 100;
-            backdrop-filter: blur(5px);
+            backdrop-filter: blur(3px);
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        
+        .ui-panel h3 {
+            margin: 0 0 4px 0;
+            font-size: 14px;
+        }
+        
+        .ui-panel div {
+            margin: 2px 0;
         }
         
         .controls-panel {
@@ -36,10 +50,86 @@
             z-index: 100;
             backdrop-filter: blur(5px);
             max-width: 300px;
+            display: none; /* 移动端隐藏 */
         }
         
-
+        /* 移动端虚拟控制器 */
+        .mobile-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            z-index: 50;
+            pointer-events: none;
+        }
         
+        .joystick {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            touch-action: none;
+        }
+        
+        .joystick-knob {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .joystick-left {
+            bottom: 20px;
+            left: 20px;
+        }
+        
+        .joystick-right {
+            bottom: 20px;
+            right: 20px;
+        }
+        
+        .joystick-label {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        /* 桌面端显示控制说明 */
+        @media (min-width: 768px) {
+            .controls-panel {
+                display: block !important;
+            }
+            .mobile-controls {
+                display: none;
+            }
+        }
+        
+        /* 移动端隐藏控制说明，显示虚拟控制器 */
+        @media (max-width: 767px) {
+            .controls-panel {
+                display: none !important;
+            }
+            .mobile-controls {
+                display: block;
+            }
+        }
+
         .control-group {
             margin-bottom: 10px;
         }
@@ -128,7 +218,20 @@
         </div>
     </div>
     
-
+    <!-- 移动端虚拟控制器 -->
+    <div class="mobile-controls">
+        <!-- 左摇杆：飞行控制（俯仰和翻滚） -->
+        <div class="joystick joystick-left" id="leftJoystick">
+            <div class="joystick-label">飞行</div>
+            <div class="joystick-knob" id="leftKnob"></div>
+        </div>
+        
+        <!-- 右摇杆：推力和转向 -->
+        <div class="joystick joystick-right" id="rightJoystick">
+            <div class="joystick-label">推力</div>
+            <div class="joystick-knob" id="rightKnob"></div>
+        </div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="game.js"></script>
