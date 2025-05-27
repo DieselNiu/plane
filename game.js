@@ -12,6 +12,28 @@ class FlightSimulator {
         this.afterburnerActive = false;
         this.controls = {};
         
+        // 新增：飞行模式系统
+        this.flightMode = 'ground'; // 'ground' 或 'air'
+        this.previousMode = 'ground';
+        this.modeTransitionSmoothing = 0; // 0-1，用于模式切换的平滑过渡
+        
+        // 新增：智能协调转弯系统
+        this.targetRollAngle = 0;     // 目标翻滚角
+        this.targetYawRate = 0;       // 目标偏航速率
+        this.coordinatedTurnActive = false;
+        
+        // 新增：配平系统
+        this.trimSystem = {
+            targetSpeed: 200,           // 目标巡航速度 km/h
+            speedTrimStrength: 'arcade', // 'arcade', 'simulation', 'expert'
+            attitudeTrimStrength: 'arcade',
+            rollDamping: 2.0,
+            pitchStability: 1.5,
+            yawDamping: 1.8
+        };
+        
+
+        
         // 移动端控制器状态
         this.mobileControls = {
             leftJoystick: { x: 0, y: 0, active: false },
@@ -21,7 +43,7 @@ class FlightSimulator {
         this.otherPlayers = new Map();
         this.peer = null;
         this.connections = new Map();
-        this.globalRoomId = 'flight-simulator-global-room'; // 全局房间ID
+        this.globalRoomId = 'flight-simulator-global-room';
         this.isHost = false;
         
         // 固定随机种子以确保场景一致性
@@ -1377,11 +1399,8 @@ class FlightSimulator {
     }
     
     setupCamera() {
-        this.cameraDistance = 25;
-        this.cameraHeight = 8;
-        // Set camera rotation to be behind airplane, looking forward along airplane direction
-        this.cameraRotation = { x: 0, y: 0 }; // 0° puts camera behind airplane looking in +X direction (airplane's forward direction)
-        // Initial position will be calculated by updateCamera()
+        // 初始化简单第三人称跟随摄像机 - 按照文档2.md要求
+        // 不再需要复杂的三层跟随系统
     }
     
     setupControls() {
@@ -1391,19 +1410,6 @@ class FlightSimulator {
         
         document.addEventListener('keyup', (event) => {
             this.controls[event.code] = false;
-        });
-        
-        document.addEventListener('mousemove', (event) => {
-            if (document.pointerLockElement === this.renderer.domElement) {
-                const sensitivity = 0.003;
-                this.cameraRotation.y -= event.movementX * sensitivity;
-                this.cameraRotation.x += event.movementY * sensitivity;
-                this.cameraRotation.x = Math.max(-Math.PI/6, Math.min(Math.PI/2, this.cameraRotation.x));
-            }
-        });
-        
-        this.renderer.domElement.addEventListener('click', () => {
-            this.renderer.domElement.requestPointerLock();
         });
         
         // 设置移动端触摸控制器
@@ -1429,7 +1435,7 @@ class FlightSimulator {
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
             
-            let touch = event.touches ? event.touches[0] : event;
+            const touch = event.touches ? event.touches[0] : event;
             if (event.type.includes('end') || event.type.includes('cancel')) {
                 // 释放摇杆
                 this.mobileControls[controlKey] = { x: 0, y: 0, active: false };
@@ -1512,146 +1518,438 @@ class FlightSimulator {
     }
     
     updatePhysics(deltaTime) {
-        const force = new THREE.Vector3();
-        const baseSpeed = 120; // 大幅增加基础速度！！！
+        // === 第一步：检测飞行模式 ===
+        this.updateFlightMode(deltaTime);
         
-        this.afterburnerActive = this.controls.ShiftLeft || this.controls.ShiftRight;
+        // === 第二步：处理智能控制输入 ===
+        this.processControlInputs(deltaTime);
         
-        // 集成移动端摇杆控制
+        // === 第三步：应用物理和配平系统 ===
+        this.applyPhysicsAndTrim(deltaTime);
+        
+        // === 第四步：更新相关系统 ===
+        this.updateControlSurfaces();
+        this.updateUI();
+        this.updateCamera();
+        
+        if (this.peer && this.peer.open) {
+            this.broadcastPosition();
+        }
+    }
+    
+    // 检测和更新飞行模式
+    updateFlightMode(deltaTime) {
+        const currentSpeed = this.velocity.length() * 3.6; // km/h
+        const currentAltitude = this.airplane.position.y;
+        
+        // 根据2.md文档的模式切换逻辑
+        this.previousMode = this.flightMode;
+        
+        if (currentSpeed < 40 && currentAltitude < 3) {
+            this.flightMode = 'ground';
+        } else if (currentSpeed >= 40 || currentAltitude >= 3) {
+            this.flightMode = 'air';
+        }
+        
+        // 平滑过渡处理
+        if (this.previousMode !== this.flightMode) {
+            this.modeTransitionSmoothing = 0; // 开始新的过渡
+        } else {
+            this.modeTransitionSmoothing = Math.min(this.modeTransitionSmoothing + deltaTime * 2, 1.0);
+        }
+    }
+    
+    // 处理智能控制输入
+    processControlInputs(deltaTime) {
+        // 初始化姿态角度
+        this.pitchAngle = this.pitchAngle || 0;
+        this.yawAngle = this.yawAngle || 0;
+        this.rollAngle = this.rollAngle || 0;
+        
+        // 移动端摇杆状态
         const leftJoy = this.mobileControls.leftJoystick;
         const rightJoy = this.mobileControls.rightJoystick;
         
-        // 油门响应 - 改进的前进/倒退控制
+        // 油门控制 - 根据文档需求改进
+        this.processThrottleControl(deltaTime, rightJoy);
+        
+        // A/D键纯YAW控制系统 - 严格按照文档要求
+        this.processPureYawControls(deltaTime, rightJoy);
+        
+        // 精确控制 - 方向键的直接控制
+        this.processPrecisionControls(deltaTime, leftJoy);
+        
+        // 应用配平系统
+        this.applyTrimSystem(deltaTime);
+    }
+    
+    // 油门控制处理
+    processThrottleControl(deltaTime, rightJoy) {
+        this.afterburnerActive = this.controls.ShiftLeft || this.controls.ShiftRight;
+        
+        // W/S键控制
         if (this.controls.KeyW) {
-            this.throttle = Math.min(this.throttle + deltaTime * 3.5, 1.0); // 更快的油门响应速度！！！
+            this.throttle = Math.min(this.throttle + deltaTime * 3.5, 1.0);
         }
         if (this.controls.KeyS) {
-            // 在地面时，S键提供强力倒退功能
-            if (this.airplane.position.y <= 2.5) {
-                this.throttle = Math.max(this.throttle - deltaTime * 2.5, -0.8); // 允许强力倒退
+            if (this.flightMode === 'ground') {
+                // 地面模式：支持强力倒车
+                this.throttle = Math.max(this.throttle - deltaTime * 2.5, -0.8);
             } else {
-                // 在空中时，S键快速减速和反向推力
-                this.throttle = Math.max(this.throttle - deltaTime * 2.0, -0.3); // 空中也允许轻微反推
+                // 空中模式：仅减速，不支持倒飞
+                this.throttle = Math.max(this.throttle - deltaTime * 2.0, 0);
             }
         }
         
-        // 右摇杆Y轴直接控制推力（移动端）
+        // 移动端右摇杆Y轴控制推力
         if (rightJoy.active && Math.abs(rightJoy.y) > 0.1) {
-            // 右摇杆向上推：增加推力，向下拉：减少推力/倒退
-            const targetThrottle = rightJoy.y; // 直接映射到 -1 到 1
-            if (this.airplane.position.y <= 2.5) {
-                // 地面：允许全范围推力包括倒退
+            const targetThrottle = rightJoy.y;
+            if (this.flightMode === 'ground') {
                 this.throttle = Math.max(-0.8, Math.min(1.0, targetThrottle));
             } else {
-                // 空中：限制倒退推力
-                this.throttle = Math.max(-0.3, Math.min(1.0, targetThrottle));
+                this.throttle = Math.max(0, Math.min(1.0, targetThrottle));
             }
         }
         
-        // 移动端后燃器控制：右摇杆推到极限位置
+        // 移动端后燃器控制
         if (rightJoy.active && rightJoy.y > 0.9) {
             this.afterburnerActive = true;
-        } else if (rightJoy.active && rightJoy.y <= 0.9) {
-            this.afterburnerActive = this.controls.ShiftLeft || this.controls.ShiftRight;
         }
         
-        // 松开W/S键时的油门处理（仅当移动端摇杆未激活时）
+        // 自动配平油门（当无输入时）
         if (!this.controls.KeyW && !this.controls.KeyS && !rightJoy.active) {
-            if (this.airplane.position.y <= 2.5) {
-                // 在地面时，油门自动回到0（怠速）
-                if (this.throttle > 0) {
-                    this.throttle = Math.max(this.throttle - deltaTime * 1.0, 0);
-                } else if (this.throttle < 0) {
-                    this.throttle = Math.min(this.throttle + deltaTime * 1.0, 0);
-                }
+            const targetThrottle = this.calculateTargetThrottle();
+            const trimRate = this.getTrimStrength('speed') * deltaTime;
+            this.throttle = THREE.MathUtils.lerp(this.throttle, targetThrottle, trimRate);
+        }
+    }
+    
+    // A/D键纯YAW控制系统 - 严格按照文档2.md要求
+    processPureYawControls(deltaTime, rightJoy) {
+        // A/D键：纯YAW转向控制（无Roll）
+        if (this.controls.KeyA) {
+            // A键：空中模式纯YAW左转，地面模式纯方向舵控制
+            if (this.flightMode === 'ground') {
+                const groundYawRate = this.calculateGroundYawRate(1, deltaTime);
+                this.yawAngle += groundYawRate;
             } else {
-                // 在空中时，油门也回到0，但依靠惯性保持速度
-                if (this.throttle > 0) {
-                    this.throttle = Math.max(this.throttle - deltaTime * 2.0, 0);
-                } else if (this.throttle < 0) {
-                    this.throttle = Math.min(this.throttle + deltaTime * 2.0, 0);
-                }
+                // 空中模式：纯偏航控制，无翻滚
+                this.yawAngle += deltaTime * 1.2; // 纯YAW左转
             }
         }
         
-        // 初始化飞机姿态角度
-        this.pitchAngle = this.pitchAngle || 0; // 俯仰角 (绕Z轴)
-        this.yawAngle = this.yawAngle || 0;     // 偏航角 (绕Y轴) 
-        this.rollAngle = this.rollAngle || 0;   // 翻滚角 (绕X轴)
-        
-        const controlSpeed = 1.8; // 控制响应速度
-        
-        // A/D键控制偏航 (Yaw) - 方向舵
-        if (this.controls.KeyA) {
-            this.yawAngle += deltaTime * controlSpeed; // 向左偏航
-        }
         if (this.controls.KeyD) {
-            this.yawAngle -= deltaTime * controlSpeed; // 向右偏航
+            // D键：空中模式纯YAW右转，地面模式纯方向舵控制
+            if (this.flightMode === 'ground') {
+                const groundYawRate = this.calculateGroundYawRate(-1, deltaTime);
+                this.yawAngle += groundYawRate;
+            } else {
+                // 空中模式：纯偏航控制，无翻滚
+                this.yawAngle -= deltaTime * 1.2; // 纯YAW右转
+            }
         }
         
-        // 右摇杆X轴控制偏航转向（移动端）
+        // 移动端右摇杆X轴输入（纯YAW控制）
         if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
-            this.yawAngle -= rightJoy.x * deltaTime * controlSpeed * 1.5; // 右摇杆左右控制转向
+            if (this.flightMode === 'ground') {
+                const groundYawRate = this.calculateGroundYawRate(-rightJoy.x, deltaTime);
+                this.yawAngle += groundYawRate;
+            } else {
+                // 空中模式：纯偏航控制
+                this.yawAngle -= rightJoy.x * deltaTime * 1.2;
+            }
+        }
+    }
+    
+    // 计算地面模式的偏航速率（方向舵控制）
+    calculateGroundYawRate(turnInput, deltaTime) {
+        const currentSpeed = this.velocity.length() * 3.6; // km/h
+        
+        // 速度越高，方向舵响应越敏感（模拟真实地面滑行）
+        const speedFactor = Math.min(currentSpeed / 40, 2.0);
+        const baseYawRate = 2.0;
+        
+        return turnInput * deltaTime * baseYawRate * (0.5 + speedFactor * 0.5);
+    }
+    
+    // 执行空中协调转弯
+    executeCoordinatedTurn(turnInput, deltaTime) {
+        const currentSpeed = this.velocity.length() * 3.6; // km/h
+        
+        // === 主要动作：Roll（翻滚倾斜）===
+        const rollAngle = this.calculateOptimalRollAngle(turnInput, currentSpeed);
+        this.targetRollAngle = rollAngle;
+        
+        // === 辅助动作：Yaw（方向舵修正）===
+        const yawCorrection = this.calculateYawCorrection(turnInput, rollAngle, currentSpeed, deltaTime);
+        this.yawAngle += yawCorrection;
+        
+        // === 补偿动作：轻微Pitch调整（保持高度）===
+        const pitchCompensation = this.calculatePitchCompensation(rollAngle, deltaTime);
+        this.pitchAngle += pitchCompensation;
+        
+        // 限制俯仰角度避免过度补偿
+        this.pitchAngle = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, this.pitchAngle));
+    }
+    
+    // 计算最佳翻滚角度
+    calculateOptimalRollAngle(turnInput, currentSpeed) {
+        // 标准转弯倾斜角度计算
+        const minRoll = 10 * Math.PI / 180;  // 最小10度
+        const maxRoll = 60 * Math.PI / 180;  // 最大60度
+        
+        // 失速保护：低速时限制最大倾斜角度
+        const stallSpeed = 80; // 失速临界速度 km/h
+        if (currentSpeed < stallSpeed) {
+            const stallProtectionFactor = Math.max(currentSpeed / stallSpeed, 0.3);
+            const protectedMaxRoll = minRoll + (maxRoll - minRoll) * stallProtectionFactor;
+            return turnInput * Math.min(protectedMaxRoll, minRoll + Math.abs(turnInput) * (protectedMaxRoll - minRoll));
         }
         
-        // 上/下箭头控制俯仰 (Pitch) - 升降舵
+        // 速度因子：高速时需要较小倾斜角度以避免过载
+        const speedFactor = Math.min(Math.max((currentSpeed - 100) / 300, 0), 1);
+        
+        // 载荷因子限制：避免过度机动
+        const gForceLimit = 4.0; // 最大G力限制
+        const currentGForce = this.calculateGForce();
+        
+        if (currentGForce > gForceLimit * 0.8) {
+            // 接近G力限制时减少倾斜角度
+            const gForceFactor = Math.max(1 - (currentGForce - gForceLimit * 0.8) / (gForceLimit * 0.2), 0.5);
+            const limitedMaxRoll = maxRoll * gForceFactor;
+            return turnInput * (minRoll + Math.abs(turnInput) * (limitedMaxRoll - minRoll));
+        }
+        
+        // 正常情况下的动态调整
+        const optimalMaxRoll = maxRoll - speedFactor * (maxRoll - minRoll) * 0.3;
+        
+        return turnInput * (minRoll + Math.abs(turnInput) * (optimalMaxRoll - minRoll));
+    }
+    
+    // 计算偏航修正量
+    calculateYawCorrection(turnInput, rollAngle, currentSpeed, deltaTime) {
+        // 基于真实飞机协调转弯公式
+        const desiredTurnRate = 3 * Math.PI / 180; // 标准转弯率：3度/秒
+        const actualTurnRate = Math.sin(rollAngle) * 9.81 / (currentSpeed * 0.277); // 转换为m/s
+        
+        // 方向舵补偿：(期望偏航率 - 实际偏航率) × 补偿系数
+        const yawError = (desiredTurnRate - actualTurnRate) * turnInput;
+        const compensationStrength = 0.8;
+        
+        return yawError * compensationStrength * deltaTime;
+    }
+    
+    // 计算俯仰补偿
+    calculatePitchCompensation(rollAngle, deltaTime) {
+        // 转弯时需要轻微上拉以维持高度
+        const compensationFactor = 0.25;
+        const maxCompensation = 5 * Math.PI / 180; // 最大5度补偿
+        
+        const compensation = Math.abs(rollAngle) * compensationFactor;
+        return Math.min(compensation, maxCompensation) * deltaTime;
+    }
+    
+    // 精确控制处理（方向键） - 高级操作
+    processPrecisionControls(deltaTime, leftJoy) {
+        const controlSpeed = 1.8;
+        
+        // === 上/下箭头控制俯仰（升降舵）===
+        // 上箭头：机头下压（俯冲），对应真实飞机的推杆动作
         if (this.controls.ArrowUp) {
-            this.pitchAngle = Math.min(this.pitchAngle + deltaTime * controlSpeed, Math.PI / 4); // 抬头
+            this.pitchAngle = Math.max(this.pitchAngle - deltaTime * controlSpeed, -Math.PI / 4);
         }
+        // 下箭头：机头上抬（爬升），对应真实飞机的拉杆动作
         if (this.controls.ArrowDown) {
-            this.pitchAngle = Math.max(this.pitchAngle - deltaTime * controlSpeed, -Math.PI / 4); // 低头
+            this.pitchAngle = Math.min(this.pitchAngle + deltaTime * controlSpeed, Math.PI / 4);
         }
         
-        // 左摇杆Y轴控制俯仰（移动端）
+        // 移动端左摇杆Y轴控制俯仰
         if (leftJoy.active && Math.abs(leftJoy.y) > 0.1) {
-            const targetPitch = leftJoy.y * Math.PI / 4; // 摇杆控制目标俯仰角
+            const targetPitch = leftJoy.y * Math.PI / 4;
             this.pitchAngle = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, targetPitch));
         }
         
-        // 左/右箭头直接控制偏航转向
+        // === 左/右箭头控制智能协调转弯（Roll + Yaw混合）===
+        // 严格按照文档要求：自动混合Roll + Yaw，实现自然转弯
+        let coordinatedTurnInput = 0;
+        
         if (this.controls.ArrowLeft) {
-            this.yawAngle += deltaTime * controlSpeed; // 左箭头：向左转向
+            coordinatedTurnInput = 1; // 左转
         }
         if (this.controls.ArrowRight) {
-            this.yawAngle -= deltaTime * controlSpeed; // 右箭头：向右转向
+            coordinatedTurnInput = -1; // 右转
         }
         
-        // Q/E键控制翻滚 (Roll) - 副翼
-        if (this.controls.KeyQ) {
-            this.rollAngle = Math.max(this.rollAngle - deltaTime * controlSpeed, -Math.PI / 3); // Q键：向左翻滚
-        }
-        if (this.controls.KeyE) {
-            this.rollAngle = Math.min(this.rollAngle + deltaTime * controlSpeed, Math.PI / 3); // E键：向右翻滚
-        }
-        
-        // 左摇杆X轴控制翻滚（移动端）
+        // 移动端左摇杆X轴控制协调转弯
         if (leftJoy.active && Math.abs(leftJoy.x) > 0.1) {
-            const targetRoll = -leftJoy.x * Math.PI / 3; // 摇杆控制目标翻滚角，负号为了符合直觉
-            this.rollAngle = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRoll));
+            coordinatedTurnInput = -leftJoy.x;
         }
         
-        // 翻滚角自动回中（符合物理学），但俯仰角保持不变
-        const dampingFactor = 2.0;
-        
-        // 俯仰角处理：移动端直接设置，键盘控制时保持
-        if (!leftJoy.active && !this.controls.ArrowUp && !this.controls.ArrowDown) {
-            // 仅在移动端未激活且键盘未按下时，俯仰角可以保持当前状态
+        if (Math.abs(coordinatedTurnInput) > 0.1) {
+            this.coordinatedTurnActive = true;
+            
+            if (this.flightMode === 'ground') {
+                // 地面模式：纯方向舵控制（类似汽车方向盘）
+                const groundYawRate = this.calculateGroundYawRate(coordinatedTurnInput, deltaTime);
+                this.yawAngle += groundYawRate;
+                this.targetRollAngle = 0; // 地面不翻滚
+            } else {
+                // 空中模式：智能协调转弯（自动混合Roll + Yaw）
+                this.executeCoordinatedTurn(coordinatedTurnInput, deltaTime);
+            }
+        } else {
+            this.coordinatedTurnActive = false;
+            this.targetRollAngle = 0;
         }
         
-        // 翻滚角自动回中 - 符合空气动力学稳定性（仅当无控制输入时）
-        if (!this.controls.KeyQ && !this.controls.KeyE && !leftJoy.active) {
-            this.rollAngle = THREE.MathUtils.lerp(this.rollAngle, 0, deltaTime * dampingFactor);
+        // 平滑应用目标翻滚角度
+        const rollRate = deltaTime * 3.5;
+        this.rollAngle = THREE.MathUtils.lerp(this.rollAngle, this.targetRollAngle, rollRate);
+        
+        // 显示精确控制模式提示
+        this.updatePrecisionControlIndicator();
+    }
+    
+    // 更新精确控制指示器
+    updatePrecisionControlIndicator() {
+        const precisionElement = document.getElementById('precisionMode');
+        if (precisionElement) {
+            const arrowKeysActive = this.controls.ArrowLeft || this.controls.ArrowRight || 
+                                   this.controls.ArrowUp || this.controls.ArrowDown;
+            
+            if (arrowKeysActive) {
+                if (this.controls.ArrowLeft || this.controls.ArrowRight) {
+                    // 左右箭头现在是协调转弯
+                    precisionElement.textContent = '方向键: 协调转弯 (Roll+Yaw)';
+                    precisionElement.style.color = '#FF9800';
+                } else {
+                    // 上下箭头是俯仰控制
+                    precisionElement.textContent = '方向键: 俯仰控制';
+                    precisionElement.style.color = '#3F51B5';
+                }
+            } else if (this.controls.KeyA || this.controls.KeyD) {
+                // A/D键是纯YAW控制
+                precisionElement.textContent = 'A/D键: 纯YAW转向';
+                precisionElement.style.color = '#9C27B0';
+            } else {
+                precisionElement.textContent = '';
+            }
         }
+    }
+    
+    // 应用配平系统 - 增强支持智能协调转弯
+    applyTrimSystem(deltaTime) {
+        const trimStrength = this.getTrimStrength('attitude');
+        
+        // 翻滚角自动回中（仅当无控制输入时）
+        if (!this.coordinatedTurnActive && 
+            !this.controls.ArrowLeft && !this.controls.ArrowRight && 
+            !this.mobileControls.leftJoystick.active) {
+            
+            // 根据飞行模式调整回中速度
+            const rollTrimRate = this.flightMode === 'ground' ? 
+                this.trimSystem.rollDamping * 2.0 :  // 地面模式快速回中
+                this.trimSystem.rollDamping;          // 空中模式温和回中
+            
+            this.rollAngle = THREE.MathUtils.lerp(
+                this.rollAngle, 
+                0, 
+                deltaTime * rollTrimRate * trimStrength
+            );
+        }
+        
+        // 俯仰稳定（根据配平强度和飞行状态）
+        if (!this.controls.ArrowUp && !this.controls.ArrowDown && 
+            !this.mobileControls.leftJoystick.active) {
+            
+            let targetPitch = 0;
+            
+            if (this.flightMode === 'ground') {
+                targetPitch = 0; // 地面模式强制水平
+            } else {
+                // 空中模式：考虑速度和高度的自然配平角度
+                const currentSpeed = this.velocity.length() * 3.6;
+                const cruiseSpeed = this.trimSystem.targetSpeed;
+                
+                if (currentSpeed < cruiseSpeed * 0.8) {
+                    // 低速时轻微上拉维持升力
+                    targetPitch = Math.min(this.pitchAngle * 0.9 + 0.05, Math.PI / 12);
+                } else if (currentSpeed > cruiseSpeed * 1.2) {
+                    // 高速时轻微下压避免爬升过快
+                    targetPitch = Math.max(this.pitchAngle * 0.9 - 0.02, -Math.PI / 20);
+                } else {
+                    // 巡航速度附近缓慢趋向水平
+                    targetPitch = this.pitchAngle * 0.98;
+                }
+            }
+            
+            const pitchTrimRate = this.trimSystem.pitchStability * trimStrength * 
+                (this.flightMode === 'ground' ? 0.5 : 0.1);
+            
+            this.pitchAngle = THREE.MathUtils.lerp(
+                this.pitchAngle,
+                targetPitch,
+                deltaTime * pitchTrimRate
+            );
+        }
+        
+        // 偏航阻尼（减少不必要的左右摆动）
+        if (!this.controls.KeyA && !this.controls.KeyD && 
+            !this.mobileControls.rightJoystick.active && 
+            !this.coordinatedTurnActive) {
+            
+            // 智能偏航阻尼：考虑当前转弯状态
+            const yawDampingRate = this.flightMode === 'ground' ? 
+                this.trimSystem.yawDamping * 0.3 :  // 地面模式加强阻尼
+                this.trimSystem.yawDamping * 0.05;  // 空中模式轻微阻尼
+            
+            this.yawAngle *= (1 - deltaTime * yawDampingRate);
+        }
+    }
+    
+    // 计算目标配平油门
+    calculateTargetThrottle() {
+        const currentSpeed = this.velocity.length() * 3.6;
+        const targetSpeed = this.trimSystem.targetSpeed;
+        
+        if (this.flightMode === 'ground') {
+            return 0; // 地面模式默认怠速
+        } else {
+            // 空中模式：根据当前速度和目标速度计算目标油门
+            const speedError = (targetSpeed - currentSpeed) / targetSpeed;
+            return Math.max(0, Math.min(1, 0.5 + speedError * 0.5));
+        }
+    }
+    
+    // 获取配平强度
+    getTrimStrength(type) {
+        const strengthMap = {
+            'arcade': 1.0,      // 强力配平，新手友好
+            'simulation': 0.6,  // 中等配平，平衡真实感和易用性
+            'expert': 0.2       // 最小配平，接近真实飞行
+        };
+        
+        const setting = type === 'speed' ? 
+            this.trimSystem.speedTrimStrength : 
+            this.trimSystem.attitudeTrimStrength;
+            
+        return strengthMap[setting] || 1.0;
+    }
+    
+    // 应用物理和升力系统
+    applyPhysicsAndTrim(deltaTime) {
+        const force = new THREE.Vector3();
+        const baseSpeed = 120;
         
         // 应用旋转到飞机
         this.airplane.rotation.set(this.rollAngle, this.yawAngle, this.pitchAngle);
         
-        // 计算推力 - 支持正向和反向推力
-        let currentSpeed = baseSpeed * this.throttle; // 允许负值推力用于倒退
+        // 计算推力
+        let currentSpeed = baseSpeed * this.throttle;
         
-        // 后燃器增强 - 只在正向推力时生效
+        // 后燃器增强
         if (this.afterburnerActive && this.throttle > 0) {
-            currentSpeed *= 5.0; // 大幅增加后燃器效果！！！
+            currentSpeed *= 5.0;
             this.afterburner.material.opacity = Math.min(this.afterburner.material.opacity + deltaTime * 10, 1);
             this.afterburner.scale.set(1 + this.rng() * 0.3, 1 + this.rng() * 0.3, 1 + this.rng() * 0.5);
         } else {
@@ -1659,55 +1957,40 @@ class FlightSimulator {
             this.afterburner.scale.set(1, 1, 1);
         }
         
-        // 螺旋桨转速基于油门值（正转或反转）
+        // 螺旋桨转速
         this.propeller.rotation.x += deltaTime * 30 * this.throttle;
         
-        // 计算飞机当前朝向的推力方向（基于飞机的当前姿态）
-        const forwardDirection = new THREE.Vector3(1, 0, 0); // 飞机的前进方向是X轴正方向
-        // 按照正确的旋转顺序应用欧拉角：先偏航(Y)，再俯仰(Z)，最后翻滚(X)
+        // 计算推力方向
+        const forwardDirection = new THREE.Vector3(1, 0, 0);
         forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
         
         // 应用推力
         force.add(forwardDirection.clone().multiplyScalar(currentSpeed));
         
-        // 完美平衡的升力系统 - 确保稳定水平飞行
+        // 升力系统
         const forwardSpeed = this.velocity.dot(forwardDirection);
         if (forwardSpeed > 5) {
-            // 在巡航速度时升力精确等于重力，实现完美平衡
-            const cruiseSpeed = 80; // 降低巡航速度要求
-            const liftCoefficient = Math.min(forwardSpeed / cruiseSpeed, 2.5); // 提高最大升力
-            const baseLiftForce = 15.2; // 精确匹配重力15，确保完美平衡
-            
-            // 升力大小主要取决于速度
+            const cruiseSpeed = 80;
+            const liftCoefficient = Math.min(forwardSpeed / cruiseSpeed, 2.5);
+            const baseLiftForce = 15.2;
             const liftMagnitude = baseLiftForce * liftCoefficient;
             
-            // 升力方向 - 在水平飞行时主要向上，保持简单稳定
             let liftDirection;
             if (Math.abs(this.pitchAngle) < 0.2) {
-                // 水平飞行时，升力直接向上，确保稳定
                 liftDirection = new THREE.Vector3(0, 1, 0);
             } else {
-                // 有明显俯仰角时，升力垂直于机翼
                 liftDirection = new THREE.Vector3(0, 1, 0);
                 liftDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
             }
             
-            // 应用升力
             force.add(liftDirection.multiplyScalar(liftMagnitude));
         }
         
         // 重力
-        force.y -= 15; // 稍微增加重力
+        force.y -= 15;
         
-        // 空气阻力 - 分地面和空中处理
-        let dragCoefficient;
-        if (this.airplane.position.y <= 2.5) {
-            // 地面阻力稍大，帮助制动
-            dragCoefficient = -0.8;
-        } else {
-            // 空中阻力极小，接近真空环境
-            dragCoefficient = -0.02; // 进一步减少空气阻力，实现真正的惯性飞行
-        }
+        // 空气阻力
+        const dragCoefficient = this.flightMode === 'ground' ? -0.8 : -0.02;
         const drag = this.velocity.clone().multiplyScalar(dragCoefficient);
         force.add(drag);
         
@@ -1721,42 +2004,60 @@ class FlightSimulator {
         if (this.airplane.position.y < 2) {
             this.airplane.position.y = 2;
             this.velocity.y = Math.max(0, this.velocity.y);
-            // 在地面时减少翻滚和俯仰
             this.rollAngle *= 0.8;
             this.pitchAngle = Math.max(this.pitchAngle * 0.8, 0);
-            
-            // 地面摩擦力 - 特别对侧向速度
-            this.velocity.x *= 0.98; // 进一步减少前后摩擦
-            this.velocity.z *= 0.85;  // 适度的侧向摩擦，防止侧滑
-        }
-        
-        // 更新控制面的视觉效果
-        this.updateControlSurfaces();
-        
-        this.updateUI();
-        this.updateCamera();
-        
-        if (this.peer?.open) {
-            this.broadcastPosition();
+            this.velocity.x *= 0.98;
+            this.velocity.z *= 0.85;
         }
     }
     
     updateControlSurfaces() {
-        // 更新方向舵视觉效果
+        // 更新方向舵视觉效果 - 反映A/D键纯YAW控制和箭头键协调转弯
         if (this.rudderGroup) {
-            // 基于偏航输入显示方向舵偏转
             let rudderDeflection = 0;
-            if (this.controls.KeyA) rudderDeflection = Math.PI / 8;
-            if (this.controls.KeyD) rudderDeflection = -Math.PI / 8;
+            
+            // A/D键纯YAW控制的方向舵偏转
+            if (this.controls.KeyA) {
+                rudderDeflection = this.flightMode === 'ground' ? Math.PI / 6 : Math.PI / 8;
+            }
+            if (this.controls.KeyD) {
+                rudderDeflection = this.flightMode === 'ground' ? -Math.PI / 6 : -Math.PI / 8;
+            }
+            
+            // 箭头键协调转弯时的方向舵补偿偏转
+            if (this.coordinatedTurnActive) {
+                if (this.controls.ArrowLeft) {
+                    rudderDeflection += this.flightMode === 'ground' ? Math.PI / 8 : Math.PI / 12;
+                }
+                if (this.controls.ArrowRight) {
+                    rudderDeflection -= this.flightMode === 'ground' ? Math.PI / 8 : Math.PI / 12;
+                }
+            }
+            
             this.rudderGroup.rotation.y = rudderDeflection;
         }
         
-        // 更新机翼视觉效果 - 显示副翼偏转
+        // 更新机翼视觉效果 - 显示副翼偏转（反映翻滚状态）
         if (this.wingGroup) {
             let aileronDeflection = 0;
-            if (this.controls.KeyQ) aileronDeflection = -Math.PI / 16; // Q键副翼偏转
-            if (this.controls.KeyE) aileronDeflection = Math.PI / 16; // E键副翼偏转
+            
+            // 基于实际翻滚角度显示副翼偏转
+            if (this.coordinatedTurnActive && this.flightMode === 'air') {
+                aileronDeflection = -this.rollAngle * 0.3; // 副翼偏转与翻滚角度成比例
+            } else if (this.controls.ArrowLeft || this.controls.ArrowRight) {
+                // 精确控制模式的副翼偏转
+                if (this.controls.ArrowLeft) aileronDeflection = Math.PI / 12;
+                if (this.controls.ArrowRight) aileronDeflection = -Math.PI / 12;
+            }
+            
             this.wingGroup.rotation.x = aileronDeflection;
+        }
+        
+        // 更新升降舵视觉效果（可以通过尾翼俯仰来表示）
+        if (this.rudderGroup?.parent) {
+            // 轻微旋转整个尾翼组来表示升降舵偏转
+            const elevatorDeflection = this.pitchAngle * 0.2; // 升降舵偏转与俯仰角成比例
+            this.rudderGroup.rotation.x = elevatorDeflection;
         }
     }
 
@@ -1768,89 +2069,175 @@ class FlightSimulator {
         document.getElementById('altitude').textContent = Math.round(altitude);
         document.getElementById('playerCount').textContent = this.connections.size + 1;
         
-        // 显示油门值和推力状态
-        if (document.getElementById('throttle')) {
-            const throttlePercent = Math.round(this.throttle * 100);
-            let throttleStatus = '';
-            if (this.throttle > 0.1) {
-                throttleStatus = `前进 ${throttlePercent}%`;
-            } else if (this.throttle < -0.1) {
-                throttleStatus = `倒退 ${Math.abs(throttlePercent)}%`;
-            } else {
-                // 显示升力状态用于调试
-                const currentSpeed = this.velocity.length();
-                const liftRatio = currentSpeed / 80; // 基于新的巡航速度80
-                if (liftRatio >= 1.0) {
-                    throttleStatus = `怠速 - 完美平衡 ${Math.round(liftRatio * 100)}%`;
-                } else if (liftRatio >= 0.9) {
-                    throttleStatus = `怠速 - 接近平衡 ${Math.round(liftRatio * 100)}%`;
-                } else if (liftRatio >= 0.7) {
-                    throttleStatus = `怠速 - 缓慢下降 ${Math.round(liftRatio * 100)}%`;
-                } else {
-                    throttleStatus = `怠速 - 快速下降 ${Math.round(liftRatio * 100)}%`;
-                }
-            }
-            document.getElementById('throttle').textContent = throttleStatus;
-        }
+        // 更新飞行模式和状态指示
+        this.updateFlightModeDisplay();
         
-        // 更新雷达显示
-        this.updateRadar();
+        // 更新油门和推力状态
+        this.updateThrottleDisplay();
+        
+        // 更新姿态指示器
+        this.updateAttitudeDisplay();
+        
+
+        
+        // 更新警告系统
+        this.updateWarningSystem();
     }
     
-    updateRadar() {
-        const airplaneDot = document.getElementById('airplaneDot');
-        const radarX = document.getElementById('radarX');
-        const radarZ = document.getElementById('radarZ');
-        const radarHeading = document.getElementById('radarHeading');
-        
-        if (airplaneDot && radarX && radarZ && radarHeading) {
-            // 雷达显示范围 (±2000单位)
-            const radarRange = 2000;
-            const radarSize = 180; // 雷达显示器的大小（像素）
+    // 更新飞行模式显示
+    updateFlightModeDisplay() {
+        const modeElement = document.getElementById('flightMode');
+        if (modeElement) {
+            const modeText = this.flightMode === 'ground' ? '地面模式' : '空中模式';
+            const transitionText = this.modeTransitionSmoothing < 1.0 ? ' (切换中...)' : '';
+            modeElement.textContent = modeText + transitionText;
             
-            // 计算飞机在雷达上的位置
-            const x = this.airplane.position.x;
-            const z = this.airplane.position.z;
-            
-            // 将世界坐标转换为雷达显示坐标
-            const radarPosX = (x / radarRange) * (radarSize / 2) + (radarSize / 2);
-            const radarPosY = (-z / radarRange) * (radarSize / 2) + (radarSize / 2); // 注意Z轴反向
-            
-            // 限制在雷达范围内
-            const clampedX = Math.max(10, Math.min(radarSize - 10, radarPosX));
-            const clampedY = Math.max(10, Math.min(radarSize - 10, radarPosY));
-            
-            airplaneDot.style.left = `${clampedX}px`;
-            airplaneDot.style.top = `${clampedY}px`;
-            
-            // 更新坐标显示
-            radarX.textContent = Math.round(x);
-            radarZ.textContent = Math.round(z);
-            
-            // 计算航向角（基于偏航角）
-            const heading = ((this.yawAngle || 0) * 180 / Math.PI + 360) % 360;
-            radarHeading.textContent = Math.round(heading);
+            // 根据模式改变颜色
+            modeElement.style.color = this.flightMode === 'ground' ? '#4CAF50' : '#2196F3';
         }
     }
+    
+    // 更新油门显示
+    updateThrottleDisplay() {
+        const throttleElement = document.getElementById('throttle');
+        if (!throttleElement) return;
+        
+        const throttlePercent = Math.round(this.throttle * 100);
+        let throttleStatus = '';
+        
+        if (this.throttle > 0.1) {
+            const boostText = this.afterburnerActive ? ' (后燃器)' : '';
+            throttleStatus = `前进 ${throttlePercent}%${boostText}`;
+        } else if (this.throttle < -0.1) {
+            throttleStatus = `倒退 ${Math.abs(throttlePercent)}%`;
+        } else {
+            // 显示配平状态
+            const targetThrottle = this.calculateTargetThrottle();
+            const trimActive = Math.abs(targetThrottle) > 0.1;
+            
+            if (trimActive) {
+                throttleStatus = `配平中 (目标: ${Math.round(targetThrottle * 100)}%)`;
+            } else {
+                throttleStatus = '怠速';
+            }
+        }
+        
+        throttleElement.textContent = throttleStatus;
+    }
+    
+    // 更新姿态指示器
+    updateAttitudeDisplay() {
+        const rollElement = document.getElementById('rollAngle');
+        const pitchElement = document.getElementById('pitchAngle');
+        const yawElement = document.getElementById('heading');
+        
+        if (rollElement) {
+            const rollDegrees = Math.round(this.rollAngle * 180 / Math.PI);
+            rollElement.textContent = `${rollDegrees}°`;
+        }
+        
+        if (pitchElement) {
+            const pitchDegrees = Math.round(this.pitchAngle * 180 / Math.PI);
+            pitchElement.textContent = `${pitchDegrees}°`;
+        }
+        
+        if (yawElement) {
+            const headingDegrees = Math.round(((this.yawAngle * 180 / Math.PI) + 360) % 360);
+            yawElement.textContent = `${headingDegrees}°`;
+        }
+        
+        // 更新转弯指示
+        const turnElement = document.getElementById('turnIndicator');
+        if (turnElement) {
+            if (this.coordinatedTurnActive) {
+                const turnDirection = this.targetRollAngle > 0 ? '右转' : '左转';
+                const turnAngle = Math.round(Math.abs(this.targetRollAngle * 180 / Math.PI));
+                turnElement.textContent = `${turnDirection} ${turnAngle}°`;
+                turnElement.style.color = '#FF9800';
+            } else {
+                turnElement.textContent = '直飞';
+                turnElement.style.color = '#4CAF50';
+            }
+        }
+    }
+    
+    // 更新警告系统
+    updateWarningSystem() {
+        const warningElement = document.getElementById('warnings');
+        if (!warningElement) return;
+        
+        const warnings = [];
+        const speed = this.velocity.length() * 3.6;
+        const altitude = this.airplane.position.y;
+        
+        // 失速警告
+        if (this.flightMode === 'air' && speed < 60) {
+            warnings.push('⚠️ 失速警告');
+        }
+        
+        // 过载警告
+        const gForce = this.calculateGForce();
+        if (gForce > 3) {
+            warnings.push('⚠️ 过载警告');
+        }
+        
+        // 低空警告
+        if (this.flightMode === 'air' && altitude < 10) {
+            warnings.push('⚠️ 低空警告');
+        }
+        
+        // 高速警告
+        if (speed > 500) {
+            warnings.push('⚠️ 超速警告');
+        }
+        
+        warningElement.textContent = warnings.join(' | ') || '';
+        warningElement.style.color = warnings.length > 0 ? '#F44336' : '#4CAF50';
+    }
+    
+
     
     updateCamera() {
-        // 自动跟随飞机偏航方向 + 鼠标控制的微调
-        const airplaneYaw = this.yawAngle || 0;
-        const mouseYawOffset = this.cameraRotation.y; // 鼠标偏移（相对于飞机后方）
-        const totalYaw = airplaneYaw + mouseYawOffset; // 飞机偏航 + 鼠标控制
+        // === 第三人称跟随摄像机（Third-Person Follow Camera）===
+        // 严格按照文档2.md要求实现
         
-        // 摄像机位置在飞机后方，沿着飞机方向
-        const cameraOffset = new THREE.Vector3(
-            -Math.cos(totalYaw) * Math.cos(this.cameraRotation.x) * this.cameraDistance, // 后方（-X方向相对于飞机朝向）
-            Math.sin(this.cameraRotation.x) * this.cameraDistance + this.cameraHeight,
-            -Math.sin(totalYaw) * Math.cos(this.cameraRotation.x) * this.cameraDistance
-        );
+        // 1. 位置锁定机制：飞机始终居中，固定相对距离
+        const airplanePos = this.airplane.position.clone();
         
-        const targetPosition = this.airplane.position.clone().add(cameraOffset);
-        this.camera.position.lerp(targetPosition, 0.1);
+        // 2. 固定偏移量：摄像机位置 = 飞机位置 + 固定偏移量
+        // 偏移量在飞机的后上方
+        const offset = new THREE.Vector3(-30, 15, 0); // 后方30米，上方15米
         
-        this.camera.lookAt(this.airplane.position);
+        // 3. 平滑跟随算法：使用Vector3.Lerp实现平滑跟随
+        const targetPosition = airplanePos.clone().add(offset);
+        const smoothSpeed = 2.0; // 平滑跟随速度
+        
+        // 当前摄像机位置平滑插值到目标位置
+        this.camera.position.lerp(targetPosition, smoothSpeed * 0.016); // 假设60fps
+        
+        // 4. 视角锁定：摄像机始终朝向飞机中心点
+        // 无论飞机如何翻滚、俯仰、偏航，摄像机的相对位置关系保持不变
+        this.camera.lookAt(airplanePos);
+        
+        // 5. 姿态独立特性：背景世界会随着飞机姿态变化而"旋转"
+        // 这是自然效果，无需额外代码实现
     }
+    
+    // 计算G力（用于相机自适应）
+    calculateGForce() {
+        if (!this.previousVelocity) {
+            this.previousVelocity = this.velocity.clone();
+            return 0;
+        }
+        
+        const deltaV = this.velocity.clone().sub(this.previousVelocity);
+        this.previousVelocity.copy(this.velocity);
+        
+        // G力大小（简化计算）
+        return deltaV.length() * 10; // 粗略的G力估算
+    }
+    
+
     
     initMultiplayer() {
         // 自动初始化P2P连接，所有用户进入同一个全局房间

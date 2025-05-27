@@ -173,6 +173,74 @@
             color: #4CAF50;
             font-weight: bold;
         }
+        
+        /* 姿态指示器面板样式 */
+        .attitude-panel {
+            position: absolute;
+            top: 10px;
+            left: 220px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            z-index: 100;
+            backdrop-filter: blur(3px);
+            font-size: 12px;
+            line-height: 1.2;
+            min-width: 120px;
+        }
+        
+        .attitude-panel h3 {
+            margin: 0 0 4px 0;
+            font-size: 14px;
+        }
+        
+        .attitude-panel div {
+            margin: 2px 0;
+        }
+        
+        .attitude-value {
+            color: #2196F3;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        
+        /* 警告系统面板样式 */
+        .warning-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            z-index: 100;
+            backdrop-filter: blur(3px);
+            font-size: 14px;
+            font-weight: bold;
+            min-height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .warning-text {
+            text-align: center;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.7; }
+        }
+        
+        /* 空警告时隐藏面板 */
+        .warning-panel:has(.warning-text:empty) {
+            display: none;
+        }
+        
+
     </style>
 </head>
 <body>
@@ -180,56 +248,92 @@
         <h3>✈️ 飞行状态</h3>
         <div>速度: <span id="speed" class="status-value">0</span> km/h</div>
         <div>高度: <span id="altitude" class="status-value">0</span> m</div>
-        <div>油门: <span id="throttle" class="status-value">0.00</span></div>
+        <div>模式: <span id="flightMode" class="status-value">地面模式</span></div>
+        <div>油门: <span id="throttle" class="status-value">怠速</span></div>
+        <div>转弯: <span id="turnIndicator" class="status-value">直飞</span></div>
+        <div id="precisionMode" style="color: #9C27B0; font-weight: bold;"></div>
         <div>在线玩家: <span id="playerCount" class="status-value">1</span></div>
         <div>连接状态: <span id="connectionStatus" class="status-value">连接中...</span></div>
     </div>
     
+    <!-- 新增：姿态指示器面板 -->
+    <div class="attitude-panel">
+        <h3>🎯 姿态指示</h3>
+        <div>翻滚: <span id="rollAngle" class="attitude-value">0°</span></div>
+        <div>俯仰: <span id="pitchAngle" class="attitude-value">0°</span></div>
+        <div>航向: <span id="heading" class="attitude-value">0°</span></div>
+    </div>
+    
+
+    
+    <!-- 新增：警告系统面板 -->
+    <div class="warning-panel">
+        <div id="warnings" class="warning-text"></div>
+    </div>
+    
     <div class="controls-panel">
-        <h3>🎮 飞行控制</h3>
+        <h3>🎮 智能飞行控制</h3>
         <div class="control-group">
-            <strong>推力控制:</strong><br>
-            <span class="control-key">W</span> 前进加速 (最大100%，理论速度432km/h)<br>
-            <span class="control-key">S</span> 倒退减速 (地面可倒退80%)<br>
-            <span class="control-key">Shift</span> 后燃器 (5倍推力，最高2160km/h!)
+            <strong>基础控制 (WASD主控制):</strong><br>
+            <span class="control-key">W</span> 加速推进<br>
+            <span class="control-key">S</span> 减速 (地面：倒车 | 空中：减速)<br>
+            <span class="control-key">A</span> / <span class="control-key">D</span> 纯YAW转向<br>
+            &nbsp;&nbsp;• 地面：方向舵控制<br>
+            &nbsp;&nbsp;• 空中：纯偏航转向 (无翻滚)<br>
+            <span class="control-key">Shift</span> 后燃器 (5倍推力)
         </div>
         
         <div class="control-group">
-            <strong>姿态控制:</strong><br>
-            <span class="control-key">A</span> / <span class="control-key">D</span> 偏航 (左右转向)<br>
-            <span class="control-key">↑</span> / <span class="control-key">↓</span> 俯仰 (抬头/低头，保持姿态)<br>
-            <span class="control-key">←</span> / <span class="control-key">→</span> 直接左右转向<br>
-            <span class="control-key">Q</span> / <span class="control-key">E</span> 翻滚 (自动回中)
+            <strong>辅助控制 (方向键):</strong><br>
+            <span class="control-key">↑</span> / <span class="control-key">↓</span> 机头下压/上抬 (俯仰)<br>
+            <span class="control-key">←</span> / <span class="control-key">→</span> 智能协调转弯 (Roll+Yaw混合)
         </div>
         
         <div class="control-group">
-            <strong>相机控制:</strong><br>
-            鼠标移动 - 旋转视角<br>
-            点击屏幕 - 锁定鼠标
+            <strong>飞行模式自动切换:</strong><br>
+            • <span style="color: #4CAF50;">地面模式</span>: 速度&lt;40km/h 且 高度&lt;3m<br>
+            • <span style="color: #2196F3;">空中模式</span>: 速度≥40km/h 或 高度≥3m
         </div>
         
-        <div style="margin-top: 10px; font-size: 12px; color: #aaa;">
-            💡 飞行技巧:<br>
-            • W键前进，S键倒退 (支持真实倒车)<br>
-            • 松开W键后依靠惯性保持速度<br>
-            • 松开上下箭头后保持俯仰姿态<br>
-            • 升力与速度相关，足够速度可维持飞行<br>
-            • 翻滚会自动回中，符合空气动力学<br>
-            • 真实物理：姿态决定飞行方向
+        <div class="control-group">
+            <strong>配平系统:</strong><br>
+            • 自动速度配平 (目标: 200km/h)<br>
+            • 翻滚角自动回中<br>
+            • 俯仰稳定辅助<br>
+            • 偏航阻尼
+        </div>
+        
+        <div class="control-group">
+            <strong>第三人称跟随摄像机:</strong><br>
+            • 飞机始终居中，固定相对距离<br>
+            • 摄像机位置平滑跟随<br>
+            • 视角始终锁定飞机中心<br>
+            • 姿态独立，自然画面旋转
+        </div>
+        
+        <div style="margin-top: 10px; font-size: 11px; color: #aaa;">
+            💡 <strong>飞行控制特性</strong>:<br>
+            • <span style="color: #9C27B0;">纯YAW控制</span>：A/D键实现纯偏航转向，无翻滚<br>
+            • <span style="color: #FF9800;">智能协调转弯</span>：方向键自动混合Roll+Yaw，自然转弯<br>
+            • <span style="color: #2196F3;">模式自适应</span>：地面=方向舵控制，空中=对应飞行操作<br>
+            • <span style="color: #4CAF50;">失速保护</span>：低速时限制最大倾斜角度，避免失控<br>
+            • <span style="color: #00BCD4;">载荷限制</span>：高G力时自动减少机动强度<br>
+            • <span style="color: #795548;">智能配平</span>：速度感知的自动配平，维持稳定<br>
+            • <span style="color: #607D8B;">视觉反馈</span>：操纵面实时反映控制状态
         </div>
     </div>
     
     <!-- 移动端虚拟控制器 -->
     <div class="mobile-controls">
-        <!-- 左摇杆：飞行控制（俯仰和翻滚） -->
+        <!-- 左摇杆：精确控制（俯仰和翻滚） -->
         <div class="joystick joystick-left" id="leftJoystick">
-            <div class="joystick-label">飞行</div>
+            <div class="joystick-label">精确控制</div>
             <div class="joystick-knob" id="leftKnob"></div>
         </div>
         
-        <!-- 右摇杆：推力和转向 -->
+        <!-- 右摇杆：推力和智能转弯 -->
         <div class="joystick joystick-right" id="rightJoystick">
-            <div class="joystick-label">推力</div>
+            <div class="joystick-label">推力/转弯</div>
             <div class="joystick-knob" id="rightKnob"></div>
         </div>
     </div>
