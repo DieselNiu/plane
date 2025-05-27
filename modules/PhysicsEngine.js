@@ -524,8 +524,17 @@ export class PhysicsEngine {
             this.simulator.airplaneModel.afterburner.scale.set(1, 1, 1);
         }
 
-        // 螺旋桨转速
-        this.simulator.airplaneModel.propeller.rotation.x += deltaTime * 30 * this.simulator.throttle;
+        // 螺旋桨转速 - 考虑配平系统和飞行模式
+        let effectiveThrottle = this.simulator.throttle;
+
+        // 在空中模式时，即使用户没有操作，配平系统也会维持基础推力
+        if (this.simulator.flightMode === 'air') {
+            // 空中最小转速对应的油门值（维持飞行状态的基础推力）
+            const minAirThrottle = 0.3;
+            effectiveThrottle = Math.max(this.simulator.throttle, minAirThrottle);
+        }
+
+        this.simulator.airplaneModel.propeller.rotation.x += deltaTime * 30 * effectiveThrottle;
 
         // 计算推力方向（修正轴向映射）
         const forwardDirection = new THREE.Vector3(1, 0, 0);
