@@ -29,6 +29,26 @@ export class UIController {
         if (playerCountElement) {
             playerCountElement.textContent = this.simulator.multiplayerManager.connections.size + 1;
         }
+        
+        // 更新调试信息
+        this.updateDebugInfo();
+    }
+    
+    // 更新调试信息
+    updateDebugInfo() {
+        const debugElement = document.getElementById('debugInfo');
+        if (debugElement) {
+            const status = this.simulator.multiplayerManager.getConnectionStatus();
+            const debugInfo = [
+                `设备类型: ${status.isMobile ? '移动端' : 'PC端'}`,
+                `Peer ID: ${status.peerId ? `${status.peerId.substring(0, 8)}...` : '未连接'}`,
+                `是否主机: ${status.isHost ? '是' : '否'}`,
+                `连接数: ${status.connections}`,
+                `连接尝试: ${this.simulator.multiplayerManager.connectionAttempts}`,
+                `Peer状态: ${status.isConnected ? '已连接' : '未连接'}`
+            ];
+            debugElement.innerHTML = debugInfo.join('<br>');
+        }
     }
     
     // 更新飞行模式显示

@@ -349,6 +349,35 @@
             display: none;
         }
 
+        /* 调试信息面板样式 */
+        .debug-panel {
+            position: absolute;
+            top: 10px;
+            left: 360px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            z-index: 100;
+            backdrop-filter: blur(3px);
+            font-size: 12px;
+            line-height: 1.2;
+            min-width: 150px;
+        }
+
+        .debug-panel h3 {
+            margin: 0 0 4px 0;
+            font-size: 14px;
+            color: #FF9800;
+        }
+
+        /* 移动端隐藏调试面板 */
+        @media (max-width: 767px) {
+            .debug-panel {
+                display: none;
+            }
+        }
+
 
     </style>
 </head>
@@ -363,6 +392,10 @@
         <div id="precisionMode" style="color: #9C27B0; font-weight: bold;"></div>
         <div>在线玩家: <span id="playerCount" class="status-value">1</span></div>
         <div>连接状态: <span id="connectionStatus" class="status-value">连接中...</span></div>
+        <div style="margin-top: 5px;">
+            <button id="reconnectBtn" onclick="game.multiplayerManager.reconnect()" 
+                    style="font-size: 10px; padding: 3px 6px; background: #FF9800;">重连</button>
+        </div>
     </div>
 
     <!-- 新增：姿态指示器面板 -->
@@ -371,6 +404,12 @@
         <div>翻滚: <span id="rollAngle" class="attitude-value">0°</span></div>
         <div>俯仰: <span id="pitchAngle" class="attitude-value">0°</span></div>
         <div>航向: <span id="heading" class="attitude-value">0°</span></div>
+    </div>
+
+    <!-- 调试信息面板 -->
+    <div class="debug-panel">
+        <h3>🔧 连接调试</h3>
+        <div id="debugInfo" style="font-size: 10px; line-height: 1.3;"></div>
     </div>
 
 

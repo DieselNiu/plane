@@ -225,3 +225,6 @@ class FlightSimulator {
 
 // 启动游戏
 const game = new FlightSimulator();
+
+// 暴露到全局作用域，供HTML按钮调用
+window.game = game;
