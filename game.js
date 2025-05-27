@@ -23,8 +23,7 @@ class FlightSimulator {
         this.throttle = 0;
         this.flightMode = 'ground';
         this.modeTransitionSmoothing = 1.0;
-        this.coordinatedTurnActive = false;
-        this.targetRollAngle = 0;
+
         this.afterburnerActive = false;
 
         // 起飞和速度限制配置

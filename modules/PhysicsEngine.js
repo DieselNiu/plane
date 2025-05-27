@@ -290,39 +290,92 @@ export class PhysicsEngine {
         // 根据升降舵偏转和飞行状态计算俯仰力矩
         this.applyElevatorEffect(deltaTime);
 
-        // 左/右箭头控制智能协调转弯
-        let coordinatedTurnInput = 0;
+        // 左/右箭头控制简单直接的Roll操作（仅在空中生效）
+        if (this.simulator.flightMode === 'air') {
+            const rollInput = this.getRollInput(controls, leftJoy);
+            this.processRollControl(rollInput, deltaTime);
+        } else {
+            // 地面模式：左右箭头控制地面转向
+            let groundTurnInput = 0;
+            if (controls.ArrowLeft) {
+                groundTurnInput = 1;
+            }
+            if (controls.ArrowRight) {
+                groundTurnInput = -1;
+            }
+            
+            // 移动端左摇杆X轴控制地面转向
+            if (leftJoy.active && Math.abs(leftJoy.x) > 0.1) {
+                groundTurnInput = -leftJoy.x;
+            }
+            
+            if (Math.abs(groundTurnInput) > 0.1) {
+                const groundYawRate = this.calculateGroundYawRate(groundTurnInput, deltaTime);
+                this.yawAngle += groundYawRate;
+            }
+            
+            // 地面模式强制roll角度为0（立即重置，不使用插值）
+            this.rollAngle = 0;
+        }
+    }
 
+    // 获取roll输入值
+    getRollInput(controls, leftJoy) {
+        let rollInput = 0;
+        
+        // 键盘输入
         if (controls.ArrowLeft) {
-            coordinatedTurnInput = 1;
+            rollInput = 1; // 向左翻滚为正值
         }
         if (controls.ArrowRight) {
-            coordinatedTurnInput = -1;
+            rollInput = -1; // 向右翻滚为负值
         }
-
-        // 移动端左摇杆X轴控制协调转弯
+        
+        // 移动端摇杆输入
         if (leftJoy.active && Math.abs(leftJoy.x) > 0.1) {
-            coordinatedTurnInput = -leftJoy.x;
+            rollInput = -leftJoy.x; // 摇杆向左为负值，需要反转
         }
+        
+        return rollInput;
+    }
 
-        if (Math.abs(coordinatedTurnInput) > 0.1) {
-            this.simulator.coordinatedTurnActive = true;
-
-            if (this.simulator.flightMode === 'ground') {
-                const groundYawRate = this.calculateGroundYawRate(coordinatedTurnInput, deltaTime);
-                this.yawAngle += groundYawRate;
-                this.simulator.targetRollAngle = 0;
+    // 处理简化的roll控制
+    processRollControl(rollInput, deltaTime) {
+        if (Math.abs(rollInput) > 0.1) {
+            // 有输入时：直接控制roll角度
+            const maxRollAngle = 45 * Math.PI / 180; // 最大45度翻滚
+            const rollSpeed = 120 * Math.PI / 180; // 120度/秒的翻滚速度
+            
+            // 计算目标roll角度
+            const targetRollAngle = rollInput * maxRollAngle;
+            
+            // 平滑过渡到目标角度
+            const rollRate = rollSpeed * deltaTime;
+            
+            if (Math.abs(this.rollAngle - targetRollAngle) > rollRate) {
+                // 如果距离目标角度较远，以恒定速度移动
+                const direction = targetRollAngle > this.rollAngle ? 1 : -1;
+                this.rollAngle += direction * rollRate;
             } else {
-                this.executeCoordinatedTurn(coordinatedTurnInput, deltaTime);
+                // 接近目标时直接设置
+                this.rollAngle = targetRollAngle;
             }
         } else {
-            this.simulator.coordinatedTurnActive = false;
-            this.simulator.targetRollAngle = 0;
+            // 无输入时：快速回中
+            const centeringSpeed = 180 * Math.PI / 180; // 180度/秒的回中速度
+            const centeringRate = centeringSpeed * deltaTime;
+            
+            if (Math.abs(this.rollAngle) > centeringRate) {
+                const direction = this.rollAngle > 0 ? -1 : 1;
+                this.rollAngle += direction * centeringRate;
+            } else {
+                this.rollAngle = 0;
+            }
         }
-
-        // 平滑应用目标翻滚角度
-        const rollRate = deltaTime * 3.5;
-        this.rollAngle = THREE.MathUtils.lerp(this.rollAngle, this.simulator.targetRollAngle, rollRate);
+        
+        // 限制roll角度范围
+        const maxAbsoluteRoll = 60 * Math.PI / 180; // 绝对最大60度
+        this.rollAngle = Math.max(-maxAbsoluteRoll, Math.min(maxAbsoluteRoll, this.rollAngle));
     }
 
     // 执行空中协调转弯
@@ -400,22 +453,7 @@ export class PhysicsEngine {
     applyTrimSystem(deltaTime) {
         const trimStrength = this.getTrimStrength('attitude');
 
-        // 翻滚角自动回中
-        if (!this.simulator.coordinatedTurnActive &&
-            !this.simulator.controlsManager.controls.ArrowLeft &&
-            !this.simulator.controlsManager.controls.ArrowRight &&
-            !this.simulator.controlsManager.mobileControls.leftJoystick.active) {
-
-            const rollTrimRate = this.simulator.flightMode === 'ground' ?
-                this.simulator.trimSystem.rollDamping * 2.0 :
-                this.simulator.trimSystem.rollDamping;
-
-            this.rollAngle = THREE.MathUtils.lerp(
-                this.rollAngle,
-                0,
-                deltaTime * rollTrimRate * trimStrength
-            );
-        }
+        // Roll控制现在在processRollControl方法中处理，这里不需要额外的回中逻辑
 
         // 俯仰稳定
         if (!this.simulator.controlsManager.controls.ArrowUp &&
@@ -452,8 +490,7 @@ export class PhysicsEngine {
         // 偏航阻尼
         if (!this.simulator.controlsManager.controls.KeyA &&
             !this.simulator.controlsManager.controls.KeyD &&
-            !this.simulator.controlsManager.mobileControls.rightJoystick.active &&
-            !this.simulator.coordinatedTurnActive) {
+            !this.simulator.controlsManager.mobileControls.rightJoystick.active) {
 
             const yawDampingRate = this.simulator.flightMode === 'ground' ?
                 this.simulator.trimSystem.yawDamping * 0.3 :
@@ -501,7 +538,14 @@ export class PhysicsEngine {
         // X轴：翻滚（roll）- 左右箭头控制副翼，使飞机左右倾斜
         // Y轴：偏航（yaw）- A/D键控制垂直尾翼，使飞机机头左右
         // Z轴：俯仰（pitch）- 上下键控制水平尾翼，使飞机机头上下
-        this.simulator.airplane.rotation.set(this.rollAngle, this.yawAngle, this.pitchAngle);
+        
+        // 地面模式：禁用roll，只允许yaw和pitch
+        if (this.simulator.flightMode === 'ground') {
+            this.simulator.airplane.rotation.set(0, this.yawAngle, this.pitchAngle);
+        } else {
+            // 空中模式：允许所有轴向旋转
+            this.simulator.airplane.rotation.set(this.rollAngle, this.yawAngle, this.pitchAngle);
+        }
 
         // 计算推力 - 增加推力以支持更高速度，但保持平缓加速
         let thrustForce = baseSpeed * this.simulator.throttle * 2.5; // 增加推力倍数以支持更高速度
@@ -538,7 +582,12 @@ export class PhysicsEngine {
 
         // 计算推力方向（修正轴向映射）
         const forwardDirection = new THREE.Vector3(1, 0, 0);
-        forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+        // 地面模式：不应用roll角度到推力方向
+        if (this.simulator.flightMode === 'ground') {
+            forwardDirection.applyEuler(new THREE.Euler(0, this.yawAngle, this.pitchAngle, 'XYZ'));
+        } else {
+            forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+        }
 
         // 应用推力
         force.add(forwardDirection.clone().multiplyScalar(thrustForce));
@@ -560,7 +609,12 @@ export class PhysicsEngine {
                     liftDirection = new THREE.Vector3(0, 1, 0);
                 } else {
                     liftDirection = new THREE.Vector3(0, 1, 0);
-                    liftDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+                    // 地面模式：升力方向不受roll角度影响
+                    if (this.simulator.flightMode === 'ground') {
+                        liftDirection.applyEuler(new THREE.Euler(0, this.yawAngle, this.pitchAngle, 'XYZ'));
+                    } else {
+                        liftDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+                    }
                 }
 
                 force.add(liftDirection.multiplyScalar(liftMagnitude));
@@ -603,7 +657,8 @@ export class PhysicsEngine {
 
         if (currentSpeed > 0.5) {
             const forwardDirection = new THREE.Vector3(1, 0, 0);
-            forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+            // 地面模式：前进方向不受roll角度影响
+            forwardDirection.applyEuler(new THREE.Euler(0, this.yawAngle, this.pitchAngle, 'XYZ'));
 
             const currentSpeedMagnitude = this.simulator.velocity.length();
             const targetVelocity = forwardDirection.clone().multiplyScalar(currentSpeedMagnitude);
@@ -657,10 +712,11 @@ export class PhysicsEngine {
 
         // 强化侧向摩擦力，彻底消除任何残余侧滑
         const forwardDirection = new THREE.Vector3(1, 0, 0);
-        forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+        // 地面模式：摩擦力方向不受roll角度影响
+        forwardDirection.applyEuler(new THREE.Euler(0, this.yawAngle, this.pitchAngle, 'XYZ'));
 
         const rightDirection = new THREE.Vector3(0, 0, -1);
-        rightDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+        rightDirection.applyEuler(new THREE.Euler(0, this.yawAngle, this.pitchAngle, 'XYZ'));
 
         const lateralVelocity = this.simulator.velocity.dot(rightDirection);
         // 极强的侧向摩擦力，确保没有侧滑
@@ -751,11 +807,12 @@ export class PhysicsEngine {
         if (this.simulator.airplaneModel.wingGroup) {
             let aileronDeflection = 0;
 
-            if (this.simulator.coordinatedTurnActive && this.simulator.flightMode === 'air') {
-                aileronDeflection = -this.rollAngle * 0.3;
-            } else if (this.simulator.controlsManager.controls.ArrowLeft || this.simulator.controlsManager.controls.ArrowRight) {
-                if (this.simulator.controlsManager.controls.ArrowLeft) aileronDeflection = Math.PI / 12;
-                if (this.simulator.controlsManager.controls.ArrowRight) aileronDeflection = -Math.PI / 12;
+            // 只有在空中模式时才显示副翼偏转
+            if (this.simulator.flightMode === 'air') {
+                if (this.simulator.controlsManager.controls.ArrowLeft || this.simulator.controlsManager.controls.ArrowRight) {
+                    if (this.simulator.controlsManager.controls.ArrowLeft) aileronDeflection = Math.PI / 12;
+                    if (this.simulator.controlsManager.controls.ArrowRight) aileronDeflection = -Math.PI / 12;
+                }
             }
 
             this.simulator.airplaneModel.wingGroup.rotation.x = aileronDeflection;

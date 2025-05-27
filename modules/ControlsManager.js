@@ -137,8 +137,8 @@ export class ControlsManager {
             
             if (arrowKeysActive) {
                 if (this.controls.ArrowLeft || this.controls.ArrowRight) {
-                    // 左右箭头现在是协调转弯
-                    precisionElement.textContent = '方向键: 协调转弯 (Roll+Yaw)';
+                    // 左右箭头现在是简单roll控制（仅空中）
+                    precisionElement.textContent = '方向键: Roll翻滚控制 (仅空中)';
                     precisionElement.style.color = '#FF9800';
                 } else {
                     // 上下箭头是俯仰控制
