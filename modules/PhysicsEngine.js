@@ -72,9 +72,11 @@ export class PhysicsEngine {
 
         this.simulator.afterburnerActive = controls.ShiftLeft || controls.ShiftRight;
 
-        // W/S键控制
+        // W/S键控制 - 降低加速度让控制更平滑
         if (controls.KeyW) {
-            this.simulator.throttle = Math.min(this.simulator.throttle + deltaTime * 1.2, 1.0);
+            // 地面模式下加速更慢，避免过快达到高速
+            const accelerationRate = this.simulator.flightMode === 'ground' ? 0.6 : 1.0;
+            this.simulator.throttle = Math.min(this.simulator.throttle + deltaTime * accelerationRate, 1.0);
         }
         if (controls.KeyS) {
             if (this.simulator.flightMode === 'ground') {
@@ -147,16 +149,23 @@ export class PhysicsEngine {
     calculateGroundYawRate(turnInput, deltaTime) {
         const currentSpeed = this.simulator.velocity.length() * 3.6;
 
-        if (currentSpeed < 5) {
+        // 降低最小转向速度阈值，让低速时也能转向
+        if (currentSpeed < 2) {
             return 0;
         }
 
-        const minSpeed = 5;
+        const minSpeed = 2;
         const maxSpeed = 80;
         const speedFactor = Math.min((currentSpeed - minSpeed) / (maxSpeed - minSpeed), 1.0);
-        const baseYawRate = 2.5;
 
-        return turnInput * deltaTime * baseYawRate * speedFactor;
+        // 提高基础转向速率，让转向更加敏感
+        const baseYawRate = 4.0; // 从2.5提高到4.0
+
+        // 确保即使在低速时也有足够的转向能力
+        const minYawRate = 1.5;
+        const effectiveYawRate = Math.max(baseYawRate * speedFactor, minYawRate);
+
+        return turnInput * deltaTime * effectiveYawRate;
     }
 
     // 计算空中模式的偏航速率
@@ -167,27 +176,28 @@ export class PhysicsEngine {
         // 空气密度因子
         const densityFactor = Math.max(0.3, Math.exp(-altitude / 1000));
 
-        // 速度因子
+        // 速度因子 - 调整为更敏感的转向
         const minEffectiveSpeed = 40;
         const optimalSpeed = 150;
         const maxSpeed = 400;
 
         let speedFactor;
         if (currentSpeed < minEffectiveSpeed) {
-            speedFactor = (currentSpeed / minEffectiveSpeed) * 0.3;
+            speedFactor = (currentSpeed / minEffectiveSpeed) * 0.5; // 提高低速转向能力
         } else if (currentSpeed <= optimalSpeed) {
-            speedFactor = 0.3 + (currentSpeed - minEffectiveSpeed) / (optimalSpeed - minEffectiveSpeed) * 0.7;
+            speedFactor = 0.5 + (currentSpeed - minEffectiveSpeed) / (optimalSpeed - minEffectiveSpeed) * 0.5;
         } else if (currentSpeed <= maxSpeed) {
             speedFactor = 1.0;
         } else {
-            speedFactor = Math.max(0.7, 1.0 - (currentSpeed - maxSpeed) / 200 * 0.3);
+            speedFactor = Math.max(0.8, 1.0 - (currentSpeed - maxSpeed) / 200 * 0.2); // 高速时保持更好的转向
         }
 
-        // 飞行姿态影响
-        const rollEffect = Math.cos(this.rollAngle);
-        const pitchEffect = Math.cos(this.pitchAngle);
+        // 飞行姿态影响 - 减少姿态对转向的负面影响
+        const rollEffect = Math.max(0.7, Math.cos(this.rollAngle)); // 最小保持70%效果
+        const pitchEffect = Math.max(0.8, Math.cos(this.pitchAngle)); // 最小保持80%效果
 
-        const baseYawRate = 0.8;
+        // 大幅提高基础转向速率，缩小转向半径
+        const baseYawRate = 2.5; // 从0.8提高到2.5
 
         return turnInput * deltaTime * baseYawRate * speedFactor * densityFactor * rollEffect * pitchEffect;
     }
@@ -502,22 +512,45 @@ export class PhysicsEngine {
     applyGroundCarPhysics(deltaTime, force) {
         const currentSpeed = this.simulator.velocity.length() * 3.6;
 
-        if (currentSpeed > 1) {
+        if (currentSpeed > 0.5) {
             const forwardDirection = new THREE.Vector3(1, 0, 0);
             forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
 
             const currentSpeedMagnitude = this.simulator.velocity.length();
             const targetVelocity = forwardDirection.clone().multiplyScalar(currentSpeedMagnitude);
 
-            const turnResponsiveness = Math.min(currentSpeed / 20, 8.0);
-            this.simulator.velocity.lerp(targetVelocity, deltaTime * turnResponsiveness);
+            // 检查是否有转向输入
+            const controls = this.simulator.controlsManager.controls;
+            const rightJoy = this.simulator.controlsManager.mobileControls.rightJoystick;
+            const hasTurnInput = controls.KeyA || controls.KeyD ||
+                               (rightJoy.active && Math.abs(rightJoy.x) > 0.1);
+
+            if (hasTurnInput) {
+                // 检查是否是W+A或W+D的组合输入（前进+转向）
+                const hasForwardInput = controls.KeyW || (rightJoy.active && rightJoy.y > 0.1);
+
+                if (hasForwardInput) {
+                    // W+A/D组合：直接强制速度方向对齐机头方向，消除侧滑
+                    // 保持速度大小，但立即改变方向
+                    this.simulator.velocity.copy(targetVelocity);
+                } else {
+                    // 只有转向输入：使用高响应性插值
+                    const turnResponsiveness = 35.0;
+                    this.simulator.velocity.lerp(targetVelocity, deltaTime * turnResponsiveness);
+                }
+            } else {
+                // 没有转向输入时，使用较低的响应性保持稳定
+                const turnResponsiveness = Math.min(currentSpeed / 8, 8.0);
+                const finalResponsiveness = Math.max(turnResponsiveness, 3.0);
+                this.simulator.velocity.lerp(targetVelocity, deltaTime * finalResponsiveness);
+            }
         }
 
         // 地面阻力
         const groundDrag = this.simulator.velocity.clone().multiplyScalar(-0.8);
         force.add(groundDrag);
 
-        // 侧向摩擦
+        // 强化侧向摩擦力，彻底消除任何残余侧滑
         const forwardDirection = new THREE.Vector3(1, 0, 0);
         forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
 
@@ -525,7 +558,8 @@ export class PhysicsEngine {
         rightDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
 
         const lateralVelocity = this.simulator.velocity.dot(rightDirection);
-        const lateralFriction = rightDirection.clone().multiplyScalar(-lateralVelocity * 20);
+        // 极强的侧向摩擦力，确保没有侧滑
+        const lateralFriction = rightDirection.clone().multiplyScalar(-lateralVelocity * 80);
         force.add(lateralFriction);
     }
 
