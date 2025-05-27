@@ -8,6 +8,7 @@ export class PhysicsEngine {
         this.pitchAngle = 0;
         this.yawAngle = 0;
         this.rollAngle = 0;
+        this.elevatorDeflection = 0; // 升降舵偏转角度
         this.previousVelocity = null;
     }
 
@@ -29,14 +30,24 @@ export class PhysicsEngine {
     updateFlightMode(deltaTime) {
         const currentSpeed = this.simulator.velocity.length() * 3.6; // km/h
         const currentAltitude = this.simulator.airplane.position.y;
+        const controls = this.simulator.controlsManager.controls;
 
-        // 根据2.md文档的模式切换逻辑
+        // 检查起飞条件
+        this.checkTakeoffConditions(currentSpeed, controls);
+
+        // 根据2.md文档的模式切换逻辑，但增加起飞条件检查
         this.simulator.previousMode = this.simulator.flightMode;
 
         if (currentSpeed < 40 && currentAltitude < 3) {
             this.simulator.flightMode = 'ground';
         } else if (currentSpeed >= 40 || currentAltitude >= 3) {
-            this.simulator.flightMode = 'air';
+            // 只有满足起飞条件才能切换到空中模式
+            if (this.simulator.canTakeoff || currentAltitude >= 3) {
+                this.simulator.flightMode = 'air';
+            } else {
+                // 不满足起飞条件，保持地面模式
+                this.simulator.flightMode = 'ground';
+            }
         }
 
         // 平滑过渡处理
@@ -44,6 +55,21 @@ export class PhysicsEngine {
             this.simulator.modeTransitionSmoothing = 0; // 开始新的过渡
         } else {
             this.simulator.modeTransitionSmoothing = Math.min(this.simulator.modeTransitionSmoothing + deltaTime * 2, 1.0);
+        }
+    }
+
+    // 检查起飞条件
+    checkTakeoffConditions(currentSpeed, controls) {
+        // 起飞条件：速度达到300km/h 且 用户按住向下箭头键
+        const speedCondition = currentSpeed >= this.simulator.takeoffSpeed;
+        const controlCondition = controls.ArrowDown;
+
+        // 只有在地面模式下才检查起飞条件
+        if (this.simulator.flightMode === 'ground') {
+            this.simulator.canTakeoff = speedCondition && controlCondition;
+        } else {
+            // 一旦起飞，保持可起飞状态直到重新着陆
+            this.simulator.canTakeoff = true;
         }
     }
 
@@ -202,24 +228,67 @@ export class PhysicsEngine {
         return turnInput * deltaTime * baseYawRate * speedFactor * densityFactor * rollEffect * pitchEffect;
     }
 
+    // 应用升降舵效果
+    applyElevatorEffect(deltaTime) {
+        const currentSpeed = this.simulator.velocity.length() * 3.6;
+
+        if (this.simulator.flightMode === 'ground') {
+            // 地面模式：升降舵偏转只在有足够速度时才产生俯仰力矩
+            if (currentSpeed > 20) {
+                // 速度越高，升降舵效果越明显
+                const speedFactor = Math.min(currentSpeed / 80, 1.0);
+                // 修正俯仰力矩方向：升降舵向下偏转（负值）产生向上俯仰力矩（正值）
+                const pitchMoment = -this.elevatorDeflection * speedFactor * deltaTime * 2.0;
+                this.pitchAngle += pitchMoment;
+
+                // 地面模式下的俯仰角度限制
+                // 如果不满足起飞条件，严格限制向上俯仰
+                if (!this.simulator.canTakeoff) {
+                    // 不允许起飞时，限制向上俯仰角度更严格
+                    this.pitchAngle = Math.max(-Math.PI / 6, Math.min(Math.PI / 12, this.pitchAngle));
+                } else {
+                    // 满足起飞条件时，允许更大的俯仰角度
+                    this.pitchAngle = Math.max(-Math.PI / 6, Math.min(Math.PI / 6, this.pitchAngle));
+                }
+            }
+        } else {
+            // 空中模式：升降舵直接影响俯仰角度
+            const airspeedFactor = Math.min(currentSpeed / 100, 1.5);
+            // 修正俯仰力矩方向：升降舵向下偏转（负值）产生向上俯仰力矩（正值）
+            const pitchMoment = -this.elevatorDeflection * airspeedFactor * deltaTime * 3.0;
+            this.pitchAngle += pitchMoment;
+
+            // 限制俯仰角度
+            this.pitchAngle = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, this.pitchAngle));
+        }
+    }
+
     // 精确控制处理
     processPrecisionControls(deltaTime, leftJoy) {
         const controls = this.simulator.controlsManager.controls;
         const controlSpeed = 1.8;
 
-        // 上/下箭头控制俯仰
+        // 上/下箭头控制升降舵偏转角度（修正控制方向）
         if (controls.ArrowUp) {
-            this.pitchAngle = Math.max(this.pitchAngle - deltaTime * controlSpeed, -Math.PI / 4);
-        }
-        if (controls.ArrowDown) {
-            this.pitchAngle = Math.min(this.pitchAngle + deltaTime * controlSpeed, Math.PI / 4);
+            // 上箭头（推杆）：升降舵向上偏转，飞机俯冲
+            this.elevatorDeflection = Math.min(this.elevatorDeflection + deltaTime * controlSpeed, Math.PI / 6);
+        } else if (controls.ArrowDown) {
+            // 下箭头（拉杆）：升降舵向下偏转，飞机抬升
+            this.elevatorDeflection = Math.max(this.elevatorDeflection - deltaTime * controlSpeed, -Math.PI / 6);
+        } else {
+            // 没有输入时，升降舵回中
+            this.elevatorDeflection *= (1 - deltaTime * 3.0);
         }
 
-        // 移动端左摇杆Y轴控制俯仰
+        // 移动端左摇杆Y轴控制升降舵偏转
         if (leftJoy.active && Math.abs(leftJoy.y) > 0.1) {
-            const targetPitch = leftJoy.y * Math.PI / 4;
-            this.pitchAngle = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, targetPitch));
+            // 摇杆向上推（负值）= 升降舵向上偏转，飞机俯冲
+            // 摇杆向下拉（正值）= 升降舵向下偏转，飞机抬升
+            this.elevatorDeflection = -leftJoy.y * Math.PI / 6;
         }
+
+        // 根据升降舵偏转和飞行状态计算俯仰力矩
+        this.applyElevatorEffect(deltaTime);
 
         // 左/右箭头控制智能协调转弯
         let coordinatedTurnInput = 0;
@@ -427,15 +496,19 @@ export class PhysicsEngine {
         const force = new THREE.Vector3();
         const baseSpeed = 120;
 
-        // 应用旋转到飞机
-        this.simulator.airplane.rotation.set(this.pitchAngle, this.yawAngle, this.rollAngle);
+        // 应用旋转到飞机（修正轴向映射）
+        // 根据THREE.js坐标系和飞机模型朝向，重新映射轴向：
+        // X轴：翻滚（roll）- 左右箭头控制副翼，使飞机左右倾斜
+        // Y轴：偏航（yaw）- A/D键控制垂直尾翼，使飞机机头左右
+        // Z轴：俯仰（pitch）- 上下键控制水平尾翼，使飞机机头上下
+        this.simulator.airplane.rotation.set(this.rollAngle, this.yawAngle, this.pitchAngle);
 
-        // 计算推力
-        let currentSpeed = baseSpeed * this.simulator.throttle;
+        // 计算推力 - 增加推力以支持更高速度，但保持平缓加速
+        let thrustForce = baseSpeed * this.simulator.throttle * 2.5; // 增加推力倍数以支持更高速度
 
         // 后燃器增强
         if (this.simulator.afterburnerActive && this.simulator.throttle > 0) {
-            currentSpeed *= 5.0;
+            thrustForce *= 1.8; // 进一步降低后燃器倍数
             this.simulator.airplaneModel.afterburner.material.opacity = Math.min(
                 this.simulator.airplaneModel.afterburner.material.opacity + deltaTime * 10, 1
             );
@@ -454,30 +527,35 @@ export class PhysicsEngine {
         // 螺旋桨转速
         this.simulator.airplaneModel.propeller.rotation.x += deltaTime * 30 * this.simulator.throttle;
 
-        // 计算推力方向
+        // 计算推力方向（修正轴向映射）
         const forwardDirection = new THREE.Vector3(1, 0, 0);
-        forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+        forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
         // 应用推力
-        force.add(forwardDirection.clone().multiplyScalar(currentSpeed));
+        force.add(forwardDirection.clone().multiplyScalar(thrustForce));
 
-        // 升力系统
+        // 升力系统 - 只有满足起飞条件或已在空中才产生升力
         const forwardSpeed = this.simulator.velocity.dot(forwardDirection);
         if (forwardSpeed > 5) {
-            const cruiseSpeed = 80;
-            const liftCoefficient = Math.min(forwardSpeed / cruiseSpeed, 2.5);
-            const baseLiftForce = 15.2;
-            const liftMagnitude = baseLiftForce * liftCoefficient;
+            // 检查是否允许产生升力
+            const canGenerateLift = this.simulator.flightMode === 'air' || this.simulator.canTakeoff;
 
-            let liftDirection;
-            if (Math.abs(this.pitchAngle) < 0.2) {
-                liftDirection = new THREE.Vector3(0, 1, 0);
-            } else {
-                liftDirection = new THREE.Vector3(0, 1, 0);
-                liftDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+            if (canGenerateLift) {
+                const cruiseSpeed = 80;
+                const liftCoefficient = Math.min(forwardSpeed / cruiseSpeed, 2.5);
+                const baseLiftForce = 15.2;
+                const liftMagnitude = baseLiftForce * liftCoefficient;
+
+                let liftDirection;
+                if (Math.abs(this.pitchAngle) < 0.2) {
+                    liftDirection = new THREE.Vector3(0, 1, 0);
+                } else {
+                    liftDirection = new THREE.Vector3(0, 1, 0);
+                    liftDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
+                }
+
+                force.add(liftDirection.multiplyScalar(liftMagnitude));
             }
-
-            force.add(liftDirection.multiplyScalar(liftMagnitude));
         }
 
         // 重力
@@ -492,6 +570,9 @@ export class PhysicsEngine {
 
         // 应用力到速度
         this.simulator.velocity.add(force.clone().multiplyScalar(deltaTime));
+
+        // 应用速度限制
+        this.applySpeedLimit();
 
         // 更新位置
         this.simulator.airplane.position.add(this.simulator.velocity.clone().multiplyScalar(deltaTime));
@@ -513,7 +594,7 @@ export class PhysicsEngine {
 
         if (currentSpeed > 0.5) {
             const forwardDirection = new THREE.Vector3(1, 0, 0);
-            forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+            forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
             const currentSpeedMagnitude = this.simulator.velocity.length();
             const targetVelocity = forwardDirection.clone().multiplyScalar(currentSpeedMagnitude);
@@ -545,16 +626,32 @@ export class PhysicsEngine {
             }
         }
 
-        // 地面阻力
-        const groundDrag = this.simulator.velocity.clone().multiplyScalar(-0.8);
+        // 地面阻力 - 调整为支持更高速度但保持平缓加速
+        const currentSpeedMs = this.simulator.velocity.length();
+        const currentSpeedKmh = currentSpeedMs * 3.6;
+
+        // 分段阻力系统：低速时较高阻力，高速时较低阻力
+        let dragCoefficient;
+        if (currentSpeedKmh < 100) {
+            // 低速段：较高阻力，让加速平缓
+            dragCoefficient = 0.4 + currentSpeedMs * 0.015;
+        } else if (currentSpeedKmh < 300) {
+            // 中速段：中等阻力
+            dragCoefficient = 0.3 + currentSpeedMs * 0.008;
+        } else {
+            // 高速段：较低阻力，允许达到更高速度
+            dragCoefficient = 0.2 + currentSpeedMs * 0.005;
+        }
+
+        const groundDrag = this.simulator.velocity.clone().multiplyScalar(-dragCoefficient);
         force.add(groundDrag);
 
         // 强化侧向摩擦力，彻底消除任何残余侧滑
         const forwardDirection = new THREE.Vector3(1, 0, 0);
-        forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+        forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
         const rightDirection = new THREE.Vector3(0, 0, -1);
-        rightDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+        rightDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
         const lateralVelocity = this.simulator.velocity.dot(rightDirection);
         // 极强的侧向摩擦力，确保没有侧滑
@@ -579,7 +676,7 @@ export class PhysicsEngine {
         if (hasYawInput && currentSpeed > 10) {
             // 计算飞机当前的前进方向
             const forwardDirection = new THREE.Vector3(1, 0, 0);
-            forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+            forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
             const currentSpeedMagnitude = this.simulator.velocity.length();
             const targetVelocity = forwardDirection.clone().multiplyScalar(currentSpeedMagnitude);
@@ -602,10 +699,10 @@ export class PhysicsEngine {
         // 空中侧向阻力（防止侧滑）
         if (currentSpeed > 5) {
             const forwardDirection = new THREE.Vector3(1, 0, 0);
-            forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+            forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
             const rightDirection = new THREE.Vector3(0, 0, -1);
-            rightDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+            rightDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
 
             // 计算侧向速度分量
             const lateralVelocity = this.simulator.velocity.dot(rightDirection);
@@ -655,10 +752,11 @@ export class PhysicsEngine {
             this.simulator.airplaneModel.wingGroup.rotation.x = aileronDeflection;
         }
 
-        // 更新升降舵视觉效果
-        if (this.simulator.airplaneModel.rudderGroup?.parent) {
-            const elevatorDeflection = this.pitchAngle * 0.2;
-            this.simulator.airplaneModel.rudderGroup.rotation.x = elevatorDeflection;
+        // 更新升降舵视觉效果（控制水平尾翼的偏转）
+        if (this.simulator.airplaneModel.elevatorGroup) {
+            // 使用实际的升降舵偏转角度控制水平尾翼
+            // Z轴旋转控制水平尾翼的上下偏转
+            this.simulator.airplaneModel.elevatorGroup.rotation.z = this.elevatorDeflection;
         }
     }
 
@@ -674,5 +772,17 @@ export class PhysicsEngine {
             yaw: this.yawAngle,
             roll: this.rollAngle
         };
+    }
+
+    // 应用速度限制
+    applySpeedLimit() {
+        const currentSpeed = this.simulator.velocity.length() * 3.6; // km/h
+        const maxSpeedMs = this.simulator.maxSpeed / 3.6; // 转换为 m/s
+
+        // 如果超过最高速度限制，限制速度
+        if (currentSpeed > this.simulator.maxSpeed) {
+            // 保持方向，但限制速度大小
+            this.simulator.velocity.normalize().multiplyScalar(maxSpeedMs);
+        }
     }
 }

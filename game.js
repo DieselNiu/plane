@@ -27,6 +27,11 @@ class FlightSimulator {
         this.targetRollAngle = 0;
         this.afterburnerActive = false;
 
+        // 起飞和速度限制配置
+        this.canTakeoff = false;
+        this.takeoffSpeed = 300; // km/h - 起飞所需最低速度
+        this.maxSpeed = 1000; // km/h - 最高速度限制
+
         // 配平系统配置
         this.trimSystem = {
             targetSpeed: 120,
