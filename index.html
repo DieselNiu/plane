@@ -15,7 +15,7 @@
             -webkit-user-select: none;
             -webkit-touch-callout: none;
         }
-        
+
         .ui-panel {
             position: absolute;
             top: 10px;
@@ -29,16 +29,16 @@
             font-size: 12px;
             line-height: 1.2;
         }
-        
+
         .ui-panel h3 {
             margin: 0 0 4px 0;
             font-size: 14px;
         }
-        
+
         .ui-panel div {
             margin: 2px 0;
         }
-        
+
         .controls-panel {
             position: absolute;
             top: 10px;
@@ -52,7 +52,7 @@
             max-width: 300px;
             display: none; /* 移动端隐藏 */
         }
-        
+
         /* 移动端虚拟控制器 */
         .mobile-controls {
             position: fixed;
@@ -63,7 +63,7 @@
             z-index: 50;
             pointer-events: none;
         }
-        
+
         .joystick {
             position: absolute;
             width: 120px;
@@ -75,7 +75,7 @@
             pointer-events: auto;
             touch-action: none;
         }
-        
+
         .joystick-knob {
             position: absolute;
             width: 40px;
@@ -88,17 +88,17 @@
             transition: all 0.1s ease;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
-        
+
         .joystick-left {
             bottom: 20px;
             left: 20px;
         }
-        
+
         .joystick-right {
             bottom: 20px;
             right: 20px;
         }
-        
+
         .joystick-label {
             position: absolute;
             top: -25px;
@@ -109,7 +109,7 @@
             text-align: center;
             font-weight: bold;
         }
-        
+
         /* 桌面端显示控制说明 */
         @media (min-width: 768px) {
             .controls-panel {
@@ -119,7 +119,7 @@
                 display: none;
             }
         }
-        
+
         /* 移动端隐藏控制说明，显示虚拟控制器 */
         @media (max-width: 767px) {
             .controls-panel {
@@ -133,7 +133,7 @@
         .control-group {
             margin-bottom: 10px;
         }
-        
+
         .control-key {
             background: #333;
             color: #fff;
@@ -142,7 +142,7 @@
             font-family: monospace;
             margin-right: 5px;
         }
-        
+
         button {
             background: #0066cc;
             color: white;
@@ -152,28 +152,28 @@
             cursor: pointer;
             margin-right: 10px;
         }
-        
+
         button:hover {
             background: #0052a3;
         }
-        
+
         input {
             padding: 8px;
             border: 1px solid #ccc;
             border-radius: 4px;
             margin-right: 10px;
         }
-        
+
         h3 {
             margin-top: 0;
             color: #4CAF50;
         }
-        
+
         .status-value {
             color: #4CAF50;
             font-weight: bold;
         }
-        
+
         /* 姿态指示器面板样式 */
         .attitude-panel {
             position: absolute;
@@ -189,22 +189,22 @@
             line-height: 1.2;
             min-width: 120px;
         }
-        
+
         .attitude-panel h3 {
             margin: 0 0 4px 0;
             font-size: 14px;
         }
-        
+
         .attitude-panel div {
             margin: 2px 0;
         }
-        
+
         .attitude-value {
             color: #2196F3;
             font-weight: bold;
             font-family: monospace;
         }
-        
+
         /* 警告系统面板样式 */
         .warning-panel {
             position: absolute;
@@ -224,22 +224,22 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .warning-text {
             text-align: center;
             animation: blink 1s infinite;
         }
-        
+
         @keyframes blink {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0.7; }
         }
-        
+
         /* 空警告时隐藏面板 */
         .warning-panel:has(.warning-text:empty) {
             display: none;
         }
-        
+
 
     </style>
 </head>
@@ -255,7 +255,7 @@
         <div>在线玩家: <span id="playerCount" class="status-value">1</span></div>
         <div>连接状态: <span id="connectionStatus" class="status-value">连接中...</span></div>
     </div>
-    
+
     <!-- 新增：姿态指示器面板 -->
     <div class="attitude-panel">
         <h3>🎯 姿态指示</h3>
@@ -263,14 +263,14 @@
         <div>俯仰: <span id="pitchAngle" class="attitude-value">0°</span></div>
         <div>航向: <span id="heading" class="attitude-value">0°</span></div>
     </div>
-    
 
-    
+
+
     <!-- 新增：警告系统面板 -->
     <div class="warning-panel">
         <div id="warnings" class="warning-text"></div>
     </div>
-    
+
     <div class="controls-panel">
         <h3>🎮 智能飞行控制</h3>
         <div class="control-group">
@@ -282,19 +282,19 @@
             &nbsp;&nbsp;• 空中：纯偏航转向 (无翻滚)<br>
             <span class="control-key">Shift</span> 后燃器 (5倍推力)
         </div>
-        
+
         <div class="control-group">
             <strong>辅助控制 (方向键):</strong><br>
             <span class="control-key">↑</span> / <span class="control-key">↓</span> 机头下压/上抬 (俯仰)<br>
             <span class="control-key">←</span> / <span class="control-key">→</span> 智能协调转弯 (Roll+Yaw混合)
         </div>
-        
+
         <div class="control-group">
             <strong>飞行模式自动切换:</strong><br>
             • <span style="color: #4CAF50;">地面模式</span>: 速度&lt;40km/h 且 高度&lt;3m<br>
             • <span style="color: #2196F3;">空中模式</span>: 速度≥40km/h 或 高度≥3m
         </div>
-        
+
         <div class="control-group">
             <strong>配平系统:</strong><br>
             • 自动速度配平 (目标: 200km/h)<br>
@@ -302,7 +302,7 @@
             • 俯仰稳定辅助<br>
             • 偏航阻尼
         </div>
-        
+
         <div class="control-group">
             <strong>第三人称跟随摄像机:</strong><br>
             • 飞机始终居中，固定相对距离<br>
@@ -310,7 +310,7 @@
             • 视角始终锁定飞机中心<br>
             • 姿态独立，自然画面旋转
         </div>
-        
+
         <div style="margin-top: 10px; font-size: 11px; color: #aaa;">
             💡 <strong>飞行控制特性</strong>:<br>
             • <span style="color: #9C27B0;">纯YAW控制</span>：A/D键实现纯偏航转向，无翻滚<br>
@@ -322,7 +322,7 @@
             • <span style="color: #607D8B;">视觉反馈</span>：操纵面实时反映控制状态
         </div>
     </div>
-    
+
     <!-- 移动端虚拟控制器 -->
     <div class="mobile-controls">
         <!-- 左摇杆：精确控制（俯仰和翻滚） -->
@@ -330,7 +330,7 @@
             <div class="joystick-label">精确控制</div>
             <div class="joystick-knob" id="leftKnob"></div>
         </div>
-        
+
         <!-- 右摇杆：推力和智能转弯 -->
         <div class="joystick joystick-right" id="rightJoystick">
             <div class="joystick-label">推力/转弯</div>
@@ -340,6 +340,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <script src="game.js"></script>
+    <script type="module" src="game.js"></script>
 </body>
 </html>
