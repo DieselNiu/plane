@@ -183,7 +183,7 @@
             left: 20px;
         }
 
-        /* 四方向推杆控制器样式 */
+        /* 飞行操纵杆控制器样式 */
         .directional-controls {
             position: absolute;
             bottom: 20px;
@@ -194,153 +194,111 @@
             touch-action: none;
         }
 
-        .direction-lever {
+        /* 操纵杆基座 */
+        .joystick-base {
             position: absolute;
-            background: linear-gradient(to bottom,
-                rgba(60, 60, 60, 0.9) 0%,
-                rgba(40, 40, 40, 0.9) 50%,
-                rgba(30, 30, 30, 0.9) 100%);
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            border-radius: 8px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: radial-gradient(circle at center,
+                rgba(40, 40, 40, 0.95) 0%,
+                rgba(60, 60, 60, 0.9) 40%,
+                rgba(30, 30, 30, 0.95) 100%);
+            border: 3px solid rgba(255, 255, 255, 0.3);
             backdrop-filter: blur(10px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            box-shadow:
+                inset 0 2px 8px rgba(0, 0, 0, 0.4),
+                0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 操纵杆手柄 */
+        .joystick-stick {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(to bottom,
+                rgba(255, 255, 255, 0.95) 0%,
+                rgba(220, 220, 220, 0.9) 50%,
+                rgba(180, 180, 180, 0.9) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow:
+                0 2px 6px rgba(0, 0, 0, 0.4),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
             cursor: pointer;
             user-select: none;
             transition: all 0.1s ease;
+            z-index: 10;
         }
 
-        .direction-lever:active {
+        .joystick-stick:active {
             background: linear-gradient(to bottom,
-                rgba(100, 150, 255, 0.9) 0%,
+                rgba(100, 150, 255, 0.95) 0%,
                 rgba(80, 120, 200, 0.9) 50%,
                 rgba(60, 100, 180, 0.9) 100%);
             border-color: rgba(100, 150, 255, 0.8);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6),
-                        0 0 15px rgba(100, 150, 255, 0.5);
+            box-shadow:
+                0 2px 6px rgba(0, 0, 0, 0.6),
+                0 0 15px rgba(100, 150, 255, 0.5),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
         }
 
-        .lever-handle {
+        /* 方向指示器 */
+        .direction-indicators {
             position: absolute;
-            background: linear-gradient(to bottom,
-                rgba(255, 255, 255, 0.9) 0%,
-                rgba(220, 220, 220, 0.9) 50%,
-                rgba(180, 180, 180, 0.9) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.6);
-            border-radius: 4px;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-            transition: all 0.1s ease;
-        }
-
-        .direction-lever:active .lever-handle {
-            background: linear-gradient(to bottom,
-                rgba(255, 255, 150, 0.9) 0%,
-                rgba(240, 240, 130, 0.9) 50%,
-                rgba(200, 200, 110, 0.9) 100%);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5),
-                        0 0 8px rgba(255, 255, 150, 0.4);
-        }
-
-        .lever-label {
-            position: absolute;
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 16px;
-            font-weight: bold;
-            text-align: center;
-            pointer-events: none;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-        }
-
-        /* 上推杆 */
-        .direction-up {
             top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 35px;
-            height: 50px;
-        }
-
-        .direction-up .lever-handle {
-            top: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 25px;
-            height: 20px;
-        }
-
-        .direction-up .lever-label {
-            bottom: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        /* 下推杆 */
-        .direction-down {
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 35px;
-            height: 50px;
-        }
-
-        .direction-down .lever-handle {
-            bottom: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 25px;
-            height: 20px;
-        }
-
-        .direction-down .lever-label {
-            top: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        /* 左推杆 */
-        .direction-left {
             left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 50px;
-            height: 35px;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
         }
 
-        .direction-left .lever-handle {
-            left: 5px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 25px;
+        .direction-indicator {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            transition: all 0.2s ease;
         }
 
-        .direction-left .lever-label {
-            right: -20px;
+        .direction-indicator.active {
+            color: rgba(100, 150, 255, 1);
+            text-shadow: 0 0 8px rgba(100, 150, 255, 0.8);
+            transform: scale(1.2);
+        }
+
+        .indicator-up {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .indicator-down {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .indicator-left {
+            left: 10px;
             top: 50%;
             transform: translateY(-50%);
         }
 
-        /* 右推杆 */
-        .direction-right {
-            right: 0;
+        .indicator-right {
+            right: 10px;
             top: 50%;
             transform: translateY(-50%);
-            width: 50px;
-            height: 35px;
         }
 
-        .direction-right .lever-handle {
-            right: 5px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 25px;
-        }
 
-        .direction-right .lever-label {
-            left: -20px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
 
         .joystick-label {
             position: absolute;
@@ -587,32 +545,22 @@
             <div class="throttle-scale"></div>
         </div>
 
-        <!-- 右侧：四方向推杆控制 -->
+        <!-- 右侧：飞行操纵杆控制 -->
         <div class="directional-controls" id="rightJoystick">
-            <div class="joystick-label">飞行控制</div>
+            <div class="joystick-label">飞行操纵杆</div>
 
-            <!-- 上推杆 - 机头下压 -->
-            <div class="direction-lever direction-up" id="leverUp">
-                <div class="lever-handle"></div>
-                <div class="lever-label">↑</div>
+            <!-- 操纵杆基座 -->
+            <div class="joystick-base">
+                <!-- 操纵杆手柄 -->
+                <div class="joystick-stick" id="joystickStick"></div>
             </div>
 
-            <!-- 下推杆 - 机头上抬 -->
-            <div class="direction-lever direction-down" id="leverDown">
-                <div class="lever-handle"></div>
-                <div class="lever-label">↓</div>
-            </div>
-
-            <!-- 左推杆 - 左转 -->
-            <div class="direction-lever direction-left" id="leverLeft">
-                <div class="lever-handle"></div>
-                <div class="lever-label">←</div>
-            </div>
-
-            <!-- 右推杆 - 右转 -->
-            <div class="direction-lever direction-right" id="leverRight">
-                <div class="lever-handle"></div>
-                <div class="lever-label">→</div>
+            <!-- 方向指示器 -->
+            <div class="direction-indicators">
+                <div class="direction-indicator indicator-up" id="indicatorUp">↑</div>
+                <div class="direction-indicator indicator-down" id="indicatorDown">↓</div>
+                <div class="direction-indicator indicator-left" id="indicatorLeft">←</div>
+                <div class="direction-indicator indicator-right" id="indicatorRight">→</div>
             </div>
         </div>
     </div>

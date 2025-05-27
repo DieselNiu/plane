@@ -282,8 +282,9 @@ export class PhysicsEngine {
 
         // 移动端右摇杆Y轴控制升降舵偏转（类似上下箭头键功能）
         if (rightJoy.active && Math.abs(rightJoy.y) > 0.1) {
-            // 摇杆向上推（负值）= 升降舵向上偏转，飞机俯冲
-            // 摇杆向下拉（正值）= 升降舵向下偏转，飞机抬升
+            // 修正后的移动端控制逻辑，与PC端箭头键保持一致：
+            // 上推杆（负值）= 对应上箭头 = 升降舵向上偏转，飞机俯冲
+            // 下推杆（正值）= 对应下箭头 = 升降舵向下偏转，飞机抬升
             this.elevatorDeflection = -rightJoy.y * Math.PI / 6;
         }
 
@@ -303,17 +304,17 @@ export class PhysicsEngine {
             if (controls.ArrowRight) {
                 groundTurnInput = -1;
             }
-            
+
             // 移动端右摇杆X轴控制地面转向（类似左右箭头键功能）
             if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
                 groundTurnInput = -rightJoy.x;
             }
-            
+
             if (Math.abs(groundTurnInput) > 0.1) {
                 const groundYawRate = this.calculateGroundYawRate(groundTurnInput, deltaTime);
                 this.yawAngle += groundYawRate;
             }
-            
+
             // 地面模式强制roll角度为0（立即重置，不使用插值）
             this.rollAngle = 0;
         }
@@ -322,7 +323,7 @@ export class PhysicsEngine {
     // 获取roll输入值
     getRollInput(controls, rightJoy) {
         let rollInput = 0;
-        
+
         // 键盘输入（修正方向）
         if (controls.ArrowLeft) {
             rollInput = -1; // 向左翻滚为负值（向左倾斜）
@@ -330,12 +331,12 @@ export class PhysicsEngine {
         if (controls.ArrowRight) {
             rollInput = 1; // 向右翻滚为正值（向右倾斜）
         }
-        
+
         // 移动端摇杆输入（右摇杆X轴控制翻滚，类似左右箭头键功能）
         if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
             rollInput = rightJoy.x; // 摇杆向左为负值，向右为正值
         }
-        
+
         return rollInput;
     }
 
@@ -345,13 +346,13 @@ export class PhysicsEngine {
             // 有输入时：执行转弯操作
             const maxRollAngle = 45 * Math.PI / 180; // 最大45度翻滚
             const rollSpeed = 120 * Math.PI / 180; // 120度/秒的翻滚速度
-            
+
             // 计算目标roll角度
             const targetRollAngle = rollInput * maxRollAngle;
-            
+
             // 平滑过渡到目标角度
             const rollRate = rollSpeed * deltaTime;
-            
+
             if (Math.abs(this.rollAngle - targetRollAngle) > rollRate) {
                 // 如果距离目标角度较远，以恒定速度移动
                 const direction = targetRollAngle > this.rollAngle ? 1 : -1;
@@ -360,10 +361,10 @@ export class PhysicsEngine {
                 // 接近目标时直接设置
                 this.rollAngle = targetRollAngle;
             }
-            
+
             // === 真实转弯物理：Roll + Yaw组合 ===
             this.executeBankingTurn(rollInput, deltaTime);
-            
+
         } else {
             // 无输入时：让机翼保持倾斜，仅施加轻微阻尼而非强制回中
             // 模拟真实飞机的滚转惯性：机翼会慢慢回正，而不是瞬间复原
@@ -372,7 +373,7 @@ export class PhysicsEngine {
             const decay = 1 - dampingFactor * deltaTime;
             this.rollAngle *= decay;
         }
-        
+
         // 限制roll角度范围
         const maxAbsoluteRoll = 60 * Math.PI / 180; // 绝对最大60度
         this.rollAngle = Math.max(-maxAbsoluteRoll, Math.min(maxAbsoluteRoll, this.rollAngle));
@@ -381,19 +382,19 @@ export class PhysicsEngine {
     // 执行银行转弯（Banking Turn）- 真实的飞行转弯
     executeBankingTurn(rollInput, deltaTime) {
         const currentSpeed = this.simulator.velocity.length() * 3.6; // km/h
-        
+
         if (currentSpeed < 20) return; // 速度太低时不产生转弯效果
-        
+
         // === 增强的真实飞行转弯机制 ===
         // 主要：Roll倾斜产生向心力和升力分量，使飞机实际转向
         // 增强：更多Yaw协调转弯，实现更自然的空中转向
-        
+
         const rollAngleAbs = Math.abs(this.rollAngle);
         const rollDirection = Math.sign(this.rollAngle);
-        
+
         // 1. 通过roll倾斜产生实际的转向力（主要机制）
         // 这是通过修改升力方向和速度方向来实现的，在applyAirPhysics中处理
-        
+
         // 2. 增强的yaw协调转弯（主要改进点）
         if (rollAngleAbs > 2 * Math.PI / 180) { // 降低yaw启动阈值，让转向更早开始
             // 进一步提高到120%，增强yaw
@@ -402,31 +403,31 @@ export class PhysicsEngine {
             // 根据俯仰角动态衰减 yaw 协调量：俯仰越大(机头越朝上/下)，垂直向量越偏离世界竖直，yaw 效果应减弱
             const pitchAttenuation = Math.max(0.2, Math.cos(this.pitchAngle)); // 保留 20% 最低效果，避免完全失效
             const yawAssistFactor = baseYawFactor * speedYawBonus * pitchAttenuation;
-            
+
             const maxYawAssist = 15 * Math.PI / 180; // 最大每秒15度的yaw辅助
-            
+
             const yawAssist = rollAngleAbs * yawAssistFactor * (currentSpeed / 60);
             const effectiveYawAssist = Math.min(yawAssist, maxYawAssist);
-            
+
             // 应用增强的yaw辅助（同方向：向左roll配合向左yaw）
             this.yawAngle += -rollDirection * effectiveYawAssist * deltaTime;
         }
-        
+
         // 3. 智能俯仰补偿（防止转弯时高度损失，但避免过度抬升）
         if (rollAngleAbs > 5 * Math.PI / 180) { // 降低补偿启动阈值
             const pitchCompensation = rollAngleAbs * 0.25; // 稍微增加补偿强度
             const maxCompensation = 6 * Math.PI / 180; // 从5度提高到6度补偿
             const effectiveCompensation = Math.min(pitchCompensation, maxCompensation);
-            
+
             // 根据当前俯仰角度调整补偿强度，避免过度抬升
             const currentPitchFactor = Math.max(0.3, 1.0 - Math.abs(this.pitchAngle) / (Math.PI / 6));
             const adjustedCompensation = effectiveCompensation * currentPitchFactor;
-            
+
             // 轻微上升俯仰
             const currentPitchCompensation = adjustedCompensation * deltaTime * 1.8;
             this.pitchAngle += currentPitchCompensation;
         }
-        
+
         // 4. 限制俯仰角度
         this.pitchAngle = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, this.pitchAngle));
     }
@@ -509,11 +510,11 @@ export class PhysicsEngine {
         // Roll控制现在在processRollControl方法中处理，这里不需要额外的回中逻辑
 
         // 俯仰稳定（但在执行转弯时减少干扰）
-        const isRolling = this.simulator.controlsManager.controls.ArrowLeft || 
+        const isRolling = this.simulator.controlsManager.controls.ArrowLeft ||
                          this.simulator.controlsManager.controls.ArrowRight ||
-                         (this.simulator.controlsManager.mobileControls.rightJoystick.active && 
+                         (this.simulator.controlsManager.mobileControls.rightJoystick.active &&
                           Math.abs(this.simulator.controlsManager.mobileControls.rightJoystick.x) > 0.1);
-                          
+
         if (!this.simulator.controlsManager.controls.ArrowUp &&
             !this.simulator.controlsManager.controls.ArrowDown &&
             !this.simulator.controlsManager.mobileControls.rightJoystick.active &&
@@ -597,7 +598,7 @@ export class PhysicsEngine {
         // X轴：翻滚（roll）- 左右箭头控制副翼，使飞机左右倾斜
         // Y轴：偏航（yaw）- A/D键控制垂直尾翼，使飞机机头左右
         // Z轴：俯仰（pitch）- 上下键控制水平尾翼，使飞机机头上下
-        
+
         // 地面模式：禁用roll，只允许yaw和pitch
         if (this.simulator.flightMode === 'ground') {
             this.simulator.airplane.rotation.set(0, this.yawAngle, this.pitchAngle);
@@ -798,7 +799,7 @@ export class PhysicsEngine {
             const forwardDirection = new THREE.Vector3(1, 0, 0);
             const upDirection = new THREE.Vector3(0, 1, 0);
             const rightDirection = new THREE.Vector3(0, 0, -1);
-            
+
             // 应用飞机当前姿态
             forwardDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
             upDirection.applyEuler(new THREE.Euler(this.rollAngle, this.yawAngle, this.pitchAngle, 'XYZ'));
@@ -807,20 +808,20 @@ export class PhysicsEngine {
             // 计算倾斜产生的向心力
             const rollAngleAbs = Math.abs(this.rollAngle);
             const rollDirection = Math.sign(this.rollAngle);
-            
+
             // 向心力也随着俯仰角度进行衰减，避免俯仰较大时出现奇怪的水平漂移
             const centripitalForceStrength = rollAngleAbs * (currentSpeed / 50) * 12.0 * Math.max(0.2, Math.cos(this.pitchAngle)); // 增强向心力并考虑俯仰
             const maxCentripidalForce = 40.0; // 提高最大向心力
             const effectiveForce = Math.min(centripitalForceStrength, maxCentripidalForce);
-            
+
             // 应用向心力（向roll方向）
             const centripetalForce = rightDirection.clone().multiplyScalar(rollDirection * effectiveForce);
             force.add(centripetalForce);
-            
+
             // 同时修正速度方向，让飞机朝新的前进方向飞行
             const currentSpeedMagnitude = this.simulator.velocity.length();
             const targetVelocity = forwardDirection.clone().multiplyScalar(currentSpeedMagnitude);
-            
+
             // 转向时的速度方向修正强度
             const turnCorrectionStrength = rollAngleAbs * 3.0 + 2.0;
             this.simulator.velocity.lerp(targetVelocity, deltaTime * turnCorrectionStrength);
@@ -866,10 +867,10 @@ export class PhysicsEngine {
 
             // 减少侧向阻力强度，避免干扰roll转弯
             const isRolling = Math.abs(this.rollAngle) > 5 * Math.PI / 180;
-            const lateralDragStrength = isRolling ? 
+            const lateralDragStrength = isRolling ?
                 Math.min(currentSpeed / 100, 0.5) * 8 :  // roll时减少侧向阻力
                 Math.min(currentSpeed / 50, 1.0) * 15;   // 正常飞行时正常侧向阻力
-                
+
             const lateralDrag = rightDirection.clone().multiplyScalar(-lateralVelocity * lateralDragStrength);
             force.add(lateralDrag);
         }

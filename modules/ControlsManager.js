@@ -138,75 +138,154 @@ export class ControlsManager {
         });
     }
 
-    // 设置四方向推杆控制
+    // 设置飞行操纵杆控制
     setupDirectionalControls() {
-        const leverUp = document.getElementById('leverUp');
-        const leverDown = document.getElementById('leverDown');
-        const leverLeft = document.getElementById('leverLeft');
-        const leverRight = document.getElementById('leverRight');
-
-        if (!leverUp || !leverDown || !leverLeft || !leverRight) return;
-
-        // 处理推杆按下事件
-        const handleLeverPress = (direction, event) => {
-            event.preventDefault();
-
-            // 设置对应方向的控制状态
-            switch (direction) {
-                case 'up':
-                    this.mobileControls.rightJoystick = { x: 0, y: 1, active: true };
-                    console.log('推杆控制: 上推杆按下');
-                    break;
-                case 'down':
-                    this.mobileControls.rightJoystick = { x: 0, y: -1, active: true };
-                    console.log('推杆控制: 下推杆按下');
-                    break;
-                case 'left':
-                    this.mobileControls.rightJoystick = { x: -1, y: 0, active: true };
-                    console.log('推杆控制: 左推杆按下');
-                    break;
-                case 'right':
-                    this.mobileControls.rightJoystick = { x: 1, y: 0, active: true };
-                    console.log('推杆控制: 右推杆按下');
-                    break;
-            }
+        const joystickStick = document.getElementById('joystickStick');
+        const joystickBase = document.querySelector('.joystick-base');
+        const indicators = {
+            up: document.getElementById('indicatorUp'),
+            down: document.getElementById('indicatorDown'),
+            left: document.getElementById('indicatorLeft'),
+            right: document.getElementById('indicatorRight')
         };
 
-        // 处理推杆释放事件
-        const handleLeverRelease = (event) => {
-            event.preventDefault();
+        if (!joystickStick || !joystickBase) return;
+
+        let isDragging = false;
+        let startPos = { x: 0, y: 0 };
+        let currentPos = { x: 0, y: 0 };
+
+        // 获取操纵杆中心位置
+        const getJoystickCenter = () => {
+            const rect = joystickBase.getBoundingClientRect();
+            return {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            };
+        };
+
+        // 更新操纵杆位置和控制状态
+        const updateJoystick = (clientX, clientY) => {
+            const center = getJoystickCenter();
+            const deltaX = clientX - center.x;
+            const deltaY = clientY - center.y;
+
+            // 限制操纵杆移动范围（半径30px）
+            const maxDistance = 30;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            let finalX = deltaX;
+            let finalY = deltaY;
+
+            if (distance > maxDistance) {
+                const ratio = maxDistance / distance;
+                finalX = deltaX * ratio;
+                finalY = deltaY * ratio;
+            }
+
+            // 更新操纵杆手柄位置
+            joystickStick.style.transform = `translate(calc(-50% + ${finalX}px), calc(-50% + ${finalY}px))`;
+
+            // 计算控制值（-1到1）
+            const controlX = finalX / maxDistance;
+            const controlY = -finalY / maxDistance; // Y轴反转，向上为负值
+
+            // 设置死区
+            const deadZone = 0.2;
+            const finalControlX = Math.abs(controlX) > deadZone ? controlX : 0;
+            const finalControlY = Math.abs(controlY) > deadZone ? controlY : 0;
+
+            // 更新控制状态
+            // 修正Y轴控制逻辑，使其与PC端箭头键保持一致：
+            // 操纵杆向上推 = 上箭头 = 飞机俯冲（负Y值）
+            // 操纵杆向下拉 = 下箭头 = 飞机抬升（正Y值）
+            this.mobileControls.rightJoystick = {
+                x: finalControlX,
+                y: -finalControlY, // 再次反转，确保与PC端逻辑一致
+                active: Math.abs(finalControlX) > 0 || Math.abs(finalControlY) > 0
+            };
+
+            // 更新方向指示器
+            this.updateDirectionIndicators(finalControlX, finalControlY);
+
+            currentPos = { x: finalX, y: finalY };
+        };
+
+        // 重置操纵杆位置
+        const resetJoystick = () => {
+            joystickStick.style.transform = 'translate(-50%, -50%)';
             this.mobileControls.rightJoystick = { x: 0, y: 0, active: false };
-            console.log('推杆控制: 推杆释放');
+            this.updateDirectionIndicators(0, 0);
+            currentPos = { x: 0, y: 0 };
+            isDragging = false;
         };
 
-        // 为每个推杆添加事件监听器
-        const levers = [
-            { element: leverUp, direction: 'up' },
-            { element: leverDown, direction: 'down' },
-            { element: leverLeft, direction: 'left' },
-            { element: leverRight, direction: 'right' }
-        ];
+        // 触摸/鼠标开始事件
+        const handleStart = (event) => {
+            event.preventDefault();
+            isDragging = true;
 
-        levers.forEach(({ element, direction }) => {
-            // 按下事件
-            for (const eventType of ['touchstart', 'mousedown']) {
-                element.addEventListener(eventType, (event) => {
-                    handleLeverPress(direction, event);
-                });
-            }
+            const touch = event.touches ? event.touches[0] : event;
+            startPos = { x: touch.clientX, y: touch.clientY };
+            updateJoystick(touch.clientX, touch.clientY);
+        };
 
-            // 释放事件
-            for (const eventType of ['touchend', 'touchcancel', 'mouseup', 'mouseleave']) {
-                element.addEventListener(eventType, handleLeverRelease);
-            }
-        });
+        // 触摸/鼠标移动事件
+        const handleMove = (event) => {
+            if (!isDragging) return;
+            event.preventDefault();
 
-        // 防止推杆区域的滚动
+            const touch = event.touches ? event.touches[0] : event;
+            updateJoystick(touch.clientX, touch.clientY);
+        };
+
+        // 触摸/鼠标结束事件
+        const handleEnd = (event) => {
+            event.preventDefault();
+            resetJoystick();
+        };
+
+        // 添加事件监听器
+        for (const eventType of ['touchstart', 'mousedown']) {
+            joystickStick.addEventListener(eventType, handleStart);
+        }
+
+        for (const eventType of ['touchmove', 'mousemove']) {
+            document.addEventListener(eventType, handleMove);
+        }
+
+        for (const eventType of ['touchend', 'touchcancel', 'mouseup']) {
+            document.addEventListener(eventType, handleEnd);
+        }
+
+        // 防止操纵杆区域的滚动
         document.addEventListener('touchmove', (event) => {
             if (event.target.closest('.directional-controls')) {
                 event.preventDefault();
             }
         }, { passive: false });
+    }
+
+    // 更新方向指示器
+    updateDirectionIndicators(x, y) {
+        const indicators = {
+            up: document.getElementById('indicatorUp'),
+            down: document.getElementById('indicatorDown'),
+            left: document.getElementById('indicatorLeft'),
+            right: document.getElementById('indicatorRight')
+        };
+
+        // 重置所有指示器
+        Object.values(indicators).forEach(indicator => {
+            if (indicator) indicator.classList.remove('active');
+        });
+
+        // 激活对应方向的指示器
+        const threshold = 0.3;
+        if (y > threshold && indicators.up) indicators.up.classList.add('active');
+        if (y < -threshold && indicators.down) indicators.down.classList.add('active');
+        if (x < -threshold && indicators.left) indicators.left.classList.add('active');
+        if (x > threshold && indicators.right) indicators.right.classList.add('active');
     }
 
     // 更新精确控制指示器
