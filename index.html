@@ -89,7 +89,93 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
-        .joystick-left {
+        /* 油门推杆样式 */
+        .throttle-lever {
+            position: absolute;
+            width: 60px;
+            height: 180px;
+            background: linear-gradient(to bottom, 
+                rgba(50, 50, 50, 0.9) 0%,
+                rgba(30, 30, 30, 0.9) 50%,
+                rgba(20, 20, 20, 0.9) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            touch-action: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .throttle-handle {
+            position: absolute;
+            width: 50px;
+            height: 30px;
+            background: linear-gradient(to bottom, 
+                rgba(255, 255, 255, 0.9) 0%,
+                rgba(200, 200, 200, 0.9) 50%,
+                rgba(150, 150, 150, 0.9) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+            left: 50%;
+            bottom: 60px;
+            transform: translateX(-50%);
+            transition: all 0.1s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            cursor: grab;
+        }
+
+        .throttle-handle:active {
+            cursor: grabbing;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+            background: linear-gradient(to bottom, 
+                rgba(255, 255, 100, 0.9) 0%,
+                rgba(220, 220, 100, 0.9) 50%,
+                rgba(180, 180, 100, 0.9) 100%);
+        }
+
+        /* 油门推杆激活时的发光效果 */
+        .throttle-lever.active {
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 
+                        0 0 20px rgba(100, 200, 255, 0.3);
+            border-color: rgba(100, 200, 255, 0.6);
+        }
+
+        .throttle-lever.active .throttle-handle {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4),
+                        0 0 10px rgba(100, 200, 255, 0.4);
+        }
+
+        /* 油门刻度线 */
+        .throttle-scale {
+            position: absolute;
+            right: -15px;
+            top: 0;
+            height: 100%;
+            width: 10px;
+            pointer-events: none;
+        }
+
+        .throttle-scale::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            right: 0;
+            width: 8px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.6);
+            box-shadow: 
+                0 20px 0 rgba(255, 255, 255, 0.4),
+                0 40px 0 rgba(255, 255, 255, 0.6),
+                0 50px 0 rgba(100, 255, 100, 0.8), /* 中性位置标记 */
+                0 60px 0 rgba(255, 255, 255, 0.4),
+                0 80px 0 rgba(255, 255, 255, 0.6),
+                0 100px 0 rgba(255, 255, 255, 0.4),
+                0 120px 0 rgba(255, 255, 255, 0.6),
+                0 140px 0 rgba(255, 255, 255, 0.4),
+                0 160px 0 rgba(255, 255, 255, 0.6);
+        }
+
+        .throttle-left {
             bottom: 20px;
             left: 20px;
         }
@@ -108,6 +194,26 @@
             font-size: 12px;
             text-align: center;
             font-weight: bold;
+        }
+
+        /* 油门推杆标签位置调整 */
+        .throttle-lever .joystick-label {
+            top: -30px;
+            font-size: 11px;
+        }
+
+        /* 油门刻度标签 */
+        .throttle-scale::after {
+            content: 'MAX\A\A\A\A\AIDLE\A\A\A\AREV';
+            position: absolute;
+            right: -25px;
+            top: 5px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 8px;
+            line-height: 20px;
+            white-space: pre;
+            font-family: monospace;
+            pointer-events: none;
         }
 
         /* 桌面端显示控制说明 */
@@ -325,15 +431,16 @@
 
     <!-- 移动端虚拟控制器 -->
     <div class="mobile-controls">
-        <!-- 左摇杆：精确控制（俯仰和翻滚） -->
-        <div class="joystick joystick-left" id="leftJoystick">
-            <div class="joystick-label">精确控制</div>
-            <div class="joystick-knob" id="leftKnob"></div>
+        <!-- 左侧：油门推杆控制 -->
+        <div class="throttle-lever throttle-left" id="leftJoystick">
+            <div class="joystick-label">油门推杆</div>
+            <div class="throttle-handle" id="leftKnob"></div>
+            <div class="throttle-scale"></div>
         </div>
 
-        <!-- 右摇杆：推力和智能转弯 -->
+        <!-- 右摇杆：飞行控制（前后俯仰，左右转向） -->
         <div class="joystick joystick-right" id="rightJoystick">
-            <div class="joystick-label">推力/转弯</div>
+            <div class="joystick-label">飞行控制</div>
             <div class="joystick-knob" id="rightKnob"></div>
         </div>
     </div>

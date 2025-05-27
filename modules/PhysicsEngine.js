@@ -79,21 +79,21 @@ export class PhysicsEngine {
         const leftJoy = this.simulator.controlsManager.mobileControls.leftJoystick;
         const rightJoy = this.simulator.controlsManager.mobileControls.rightJoystick;
 
-        // 油门控制
-        this.processThrottleControl(deltaTime, rightJoy);
+        // 油门控制（左摇杆Y轴，类似W/S键）
+        this.processThrottleControl(deltaTime, leftJoy);
 
-        // A/D键纯YAW控制系统
+        // A/D键纯YAW控制系统（右摇杆X轴，类似A/D键或左右箭头键）
         this.processPureYawControls(deltaTime, rightJoy);
 
-        // 精确控制 - 方向键的直接控制
-        this.processPrecisionControls(deltaTime, leftJoy);
+        // 精确控制 - 方向键的直接控制（右摇杆Y轴，类似上下箭头键）
+        this.processPrecisionControls(deltaTime, rightJoy);
 
         // 应用配平系统
         this.applyTrimSystem(deltaTime);
     }
 
     // 油门控制处理
-    processThrottleControl(deltaTime, rightJoy) {
+    processThrottleControl(deltaTime, leftJoy) {
         const controls = this.simulator.controlsManager.controls;
 
         this.simulator.afterburnerActive = controls.ShiftLeft || controls.ShiftRight;
@@ -112,9 +112,9 @@ export class PhysicsEngine {
             }
         }
 
-        // 移动端右摇杆Y轴控制推力
-        if (rightJoy.active && Math.abs(rightJoy.y) > 0.1) {
-            const targetThrottle = rightJoy.y;
+        // 移动端左摇杆Y轴控制推力（类似W/S键功能）
+        if (leftJoy.active && Math.abs(leftJoy.y) > 0.1) {
+            const targetThrottle = leftJoy.y;
             if (this.simulator.flightMode === 'ground') {
                 this.simulator.throttle = Math.max(-0.8, Math.min(1.0, targetThrottle));
             } else {
@@ -123,12 +123,12 @@ export class PhysicsEngine {
         }
 
         // 移动端后燃器控制
-        if (rightJoy.active && rightJoy.y > 0.9) {
+        if (leftJoy.active && leftJoy.y > 0.9) {
             this.simulator.afterburnerActive = true;
         }
 
         // 自动配平油门
-        if (!controls.KeyW && !controls.KeyS && !rightJoy.active) {
+        if (!controls.KeyW && !controls.KeyS && !leftJoy.active) {
             const targetThrottle = this.calculateTargetThrottle();
             const trimRate = this.getTrimStrength('speed') * deltaTime;
             this.simulator.throttle = THREE.MathUtils.lerp(this.simulator.throttle, targetThrottle, trimRate);
@@ -159,7 +159,7 @@ export class PhysicsEngine {
             }
         }
 
-        // 移动端右摇杆X轴输入
+        // 移动端右摇杆X轴输入（类似A/D键或左右箭头键功能）
         if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
             if (this.simulator.flightMode === 'ground') {
                 const groundYawRate = this.calculateGroundYawRate(-rightJoy.x, deltaTime);
@@ -264,7 +264,7 @@ export class PhysicsEngine {
     }
 
     // 精确控制处理
-    processPrecisionControls(deltaTime, leftJoy) {
+    processPrecisionControls(deltaTime, rightJoy) {
         const controls = this.simulator.controlsManager.controls;
         const controlSpeed = 1.8;
 
@@ -280,11 +280,11 @@ export class PhysicsEngine {
             this.elevatorDeflection *= (1 - deltaTime * 3.0);
         }
 
-        // 移动端左摇杆Y轴控制升降舵偏转
-        if (leftJoy.active && Math.abs(leftJoy.y) > 0.1) {
+        // 移动端右摇杆Y轴控制升降舵偏转（类似上下箭头键功能）
+        if (rightJoy.active && Math.abs(rightJoy.y) > 0.1) {
             // 摇杆向上推（负值）= 升降舵向上偏转，飞机俯冲
             // 摇杆向下拉（正值）= 升降舵向下偏转，飞机抬升
-            this.elevatorDeflection = -leftJoy.y * Math.PI / 6;
+            this.elevatorDeflection = -rightJoy.y * Math.PI / 6;
         }
 
         // 根据升降舵偏转和飞行状态计算俯仰力矩
@@ -292,7 +292,7 @@ export class PhysicsEngine {
 
         // 左/右箭头控制简单直接的Roll操作（仅在空中生效）
         if (this.simulator.flightMode === 'air') {
-            const rollInput = this.getRollInput(controls, leftJoy);
+            const rollInput = this.getRollInput(controls, rightJoy);
             this.processRollControl(rollInput, deltaTime);
         } else {
             // 地面模式：左右箭头控制地面转向
@@ -304,9 +304,9 @@ export class PhysicsEngine {
                 groundTurnInput = -1;
             }
             
-            // 移动端左摇杆X轴控制地面转向
-            if (leftJoy.active && Math.abs(leftJoy.x) > 0.1) {
-                groundTurnInput = -leftJoy.x;
+            // 移动端右摇杆X轴控制地面转向（类似左右箭头键功能）
+            if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
+                groundTurnInput = -rightJoy.x;
             }
             
             if (Math.abs(groundTurnInput) > 0.1) {
@@ -320,7 +320,7 @@ export class PhysicsEngine {
     }
 
     // 获取roll输入值
-    getRollInput(controls, leftJoy) {
+    getRollInput(controls, rightJoy) {
         let rollInput = 0;
         
         // 键盘输入（修正方向）
@@ -331,9 +331,9 @@ export class PhysicsEngine {
             rollInput = 1; // 向右翻滚为正值（向右倾斜）
         }
         
-        // 移动端摇杆输入
-        if (leftJoy.active && Math.abs(leftJoy.x) > 0.1) {
-            rollInput = leftJoy.x; // 摇杆向左为负值，向右为正值
+        // 移动端摇杆输入（右摇杆X轴控制翻滚，类似左右箭头键功能）
+        if (rightJoy.active && Math.abs(rightJoy.x) > 0.1) {
+            rollInput = rightJoy.x; // 摇杆向左为负值，向右为正值
         }
         
         return rollInput;
@@ -511,12 +511,12 @@ export class PhysicsEngine {
         // 俯仰稳定（但在执行转弯时减少干扰）
         const isRolling = this.simulator.controlsManager.controls.ArrowLeft || 
                          this.simulator.controlsManager.controls.ArrowRight ||
-                         (this.simulator.controlsManager.mobileControls.leftJoystick.active && 
-                          Math.abs(this.simulator.controlsManager.mobileControls.leftJoystick.x) > 0.1);
+                         (this.simulator.controlsManager.mobileControls.rightJoystick.active && 
+                          Math.abs(this.simulator.controlsManager.mobileControls.rightJoystick.x) > 0.1);
                           
         if (!this.simulator.controlsManager.controls.ArrowUp &&
             !this.simulator.controlsManager.controls.ArrowDown &&
-            !this.simulator.controlsManager.mobileControls.leftJoystick.active &&
+            !this.simulator.controlsManager.mobileControls.rightJoystick.active &&
             !isRolling) { // 转弯时不进行俯仰稳定
 
             let targetPitch = 0;

@@ -48,37 +48,80 @@ export class ControlsManager {
             
             const touch = event.touches ? event.touches[0] : event;
             if (event.type.includes('end') || event.type.includes('cancel')) {
-                // 释放摇杆
+                // 释放控制器
                 this.mobileControls[controlKey] = { x: 0, y: 0, active: false };
-                knob.style.transform = 'translate(-50%, -50%)';
+                
+                // 根据控制器类型重置位置
+                if (controlKey === 'leftJoystick') {
+                    // 油门推杆回到中性位置（约30%位置，给减速留空间）
+                    knob.style.bottom = '60px';
+                    // 移除激活状态
+                    joystick.classList.remove('active');
+                } else {
+                    // 右摇杆回到中心
+                    knob.style.transform = 'translate(-50%, -50%)';
+                }
                 return;
             }
             
-            // 计算触摸相对于摇杆中心的位置
+            // 计算触摸相对于控制器的位置
             const touchX = touch.clientX - rect.left - centerX;
             const touchY = touch.clientY - rect.top - centerY;
             
-            // 计算距离和角度
-            const distance = Math.sqrt(touchX * touchX + touchY * touchY);
-            const angle = Math.atan2(touchY, touchX);
-            
-            // 限制在摇杆范围内
-            const clampedDistance = Math.min(distance, joystickRadius);
-            const clampedX = Math.cos(angle) * clampedDistance;
-            const clampedY = Math.sin(angle) * clampedDistance;
-            
-            // 更新摇杆按钮位置
-            knob.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
-            
-            // 更新控制状态 (-1 到 1 的范围)
-            this.mobileControls[controlKey] = {
-                x: clampedX / joystickRadius,
-                y: -clampedY / joystickRadius, // Y轴反转，向上为正
-                active: true
-            };
+            if (controlKey === 'leftJoystick') {
+                // 油门推杆：只允许垂直移动
+                const leverHeight = rect.height - 40; // 减去手柄高度和边距
+                const touchYFromBottom = rect.height - (touch.clientY - rect.top);
+                
+                // 限制在推杆范围内（10px到170px）
+                const clampedY = Math.max(10, Math.min(170, touchYFromBottom));
+                
+                // 更新推杆手柄位置
+                knob.style.bottom = `${clampedY}px`;
+                
+                // 计算油门值，以60px为中性位置（0油门）
+                // 底部10px为最大倒车(-1)，中间60px为怠速(0)，顶部170px为最大推力(1)
+                let throttleValue;
+                if (clampedY <= 60) {
+                    // 下半段：从倒车到怠速 (-1 到 0)
+                    throttleValue = (clampedY - 10) / 50 - 1;
+                } else {
+                    // 上半段：从怠速到最大推力 (0 到 1)
+                    throttleValue = (clampedY - 60) / 110;
+                }
+                
+                // 添加激活状态的视觉效果
+                joystick.classList.add('active');
+                
+                // 更新控制状态
+                this.mobileControls[controlKey] = {
+                    x: 0, // 油门推杆不支持X轴
+                    y: throttleValue,
+                    active: true
+                };
+            } else {
+                // 右摇杆：正常的二维摇杆操作
+                const distance = Math.sqrt(touchX * touchX + touchY * touchY);
+                const angle = Math.atan2(touchY, touchX);
+                
+                // 限制在摇杆范围内
+                const clampedDistance = Math.min(distance, joystickRadius);
+                const clampedX = Math.cos(angle) * clampedDistance;
+                const clampedY = Math.sin(angle) * clampedDistance;
+                
+                // 更新摇杆按钮位置
+                knob.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`;
+                
+                // 更新控制状态 (-1 到 1 的范围)
+                this.mobileControls[controlKey] = {
+                    x: clampedX / joystickRadius,
+                    y: -clampedY / joystickRadius, // Y轴反转，向上为正
+                    active: true
+                };
+            }
         };
         
-        // 左摇杆事件（飞行控制：俯仰和翻滚）
+        // 左摇杆事件（推力控制：前进/后退，类似W/S键）
         for (const eventType of ['touchstart', 'touchmove', 'mousedown', 'mousemove']) {
             leftJoystick.addEventListener(eventType, (event) => {
                 if ((eventType.includes('mouse') && event.buttons === 1) || eventType.includes('touch')) {
@@ -93,7 +136,7 @@ export class ControlsManager {
             });
         }
         
-        // 右摇杆事件（推力和转向）
+        // 右摇杆事件（飞行控制：俯仰和转向）
         for (const eventType of ['touchstart', 'touchmove', 'mousedown', 'mousemove']) {
             rightJoystick.addEventListener(eventType, (event) => {
                 if ((eventType.includes('mouse') && event.buttons === 1) || eventType.includes('touch')) {
