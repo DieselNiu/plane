@@ -487,8 +487,7 @@ export class PhysicsEngine {
         if (this.simulator.flightMode === 'ground') {
             this.applyGroundCarPhysics(deltaTime, force);
         } else {
-            const drag = this.simulator.velocity.clone().multiplyScalar(-0.02);
-            force.add(drag);
+            this.applyAirPhysics(deltaTime, force);
         }
 
         // 应用力到速度
@@ -561,6 +560,61 @@ export class PhysicsEngine {
         // 极强的侧向摩擦力，确保没有侧滑
         const lateralFriction = rightDirection.clone().multiplyScalar(-lateralVelocity * 80);
         force.add(lateralFriction);
+    }
+
+    // 应用空中物理
+    applyAirPhysics(deltaTime, force) {
+        const currentSpeed = this.simulator.velocity.length() * 3.6;
+
+        // 基础空气阻力
+        const drag = this.simulator.velocity.clone().multiplyScalar(-0.02);
+        force.add(drag);
+
+        // 检查是否有A/D转向输入
+        const controls = this.simulator.controlsManager.controls;
+        const rightJoy = this.simulator.controlsManager.mobileControls.rightJoystick;
+        const hasYawInput = controls.KeyA || controls.KeyD ||
+                           (rightJoy.active && Math.abs(rightJoy.x) > 0.1);
+
+        if (hasYawInput && currentSpeed > 10) {
+            // 计算飞机当前的前进方向
+            const forwardDirection = new THREE.Vector3(1, 0, 0);
+            forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+
+            const currentSpeedMagnitude = this.simulator.velocity.length();
+            const targetVelocity = forwardDirection.clone().multiplyScalar(currentSpeedMagnitude);
+
+            // 空中转向时的速度方向修正
+            // 根据速度调整修正强度
+            let correctionStrength;
+            if (currentSpeed < 50) {
+                correctionStrength = 8.0; // 低速时强修正
+            } else if (currentSpeed < 150) {
+                correctionStrength = 5.0; // 中速时中等修正
+            } else {
+                correctionStrength = 3.0; // 高速时轻微修正
+            }
+
+            // 应用速度方向修正，让飞机朝机头方向飞行
+            this.simulator.velocity.lerp(targetVelocity, deltaTime * correctionStrength);
+        }
+
+        // 空中侧向阻力（防止侧滑）
+        if (currentSpeed > 5) {
+            const forwardDirection = new THREE.Vector3(1, 0, 0);
+            forwardDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+
+            const rightDirection = new THREE.Vector3(0, 0, -1);
+            rightDirection.applyEuler(new THREE.Euler(this.pitchAngle, this.yawAngle, this.rollAngle, 'XYZ'));
+
+            // 计算侧向速度分量
+            const lateralVelocity = this.simulator.velocity.dot(rightDirection);
+
+            // 应用侧向阻力，强度根据速度调整
+            const lateralDragStrength = Math.min(currentSpeed / 50, 1.0) * 15;
+            const lateralDrag = rightDirection.clone().multiplyScalar(-lateralVelocity * lateralDragStrength);
+            force.add(lateralDrag);
+        }
     }
 
     updateControlSurfaces() {

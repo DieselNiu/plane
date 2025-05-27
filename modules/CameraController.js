@@ -4,67 +4,41 @@ export class CameraController {
     constructor(camera) {
         this.camera = camera;
         this.offset = new THREE.Vector3(-30, 15, 0); // 后方30米，上方15米
-
-        // 分层平滑控制
-        this.positionSmoothSpeed = 12.0; // 位置跟随速度
-        this.rotationSmoothSpeed = 15.0; // 旋转跟随速度
-        this.emergencySpeed = 30.0; // 紧急跟随速度
-
-        // 预测和补偿系统
-        this.velocityHistory = []; // 飞机速度历史
-        this.rotationHistory = []; // 飞机旋转历史
-        this.historyLength = 5; // 历史记录长度
-
-        // 状态记录
-        this.lastAirplanePosition = new THREE.Vector3();
-        this.lastAirplaneRotation = new THREE.Euler();
-        this.cameraVelocity = new THREE.Vector3(); // 摄像机运动速度
     }
 
     updateCamera(airplane) {
-        // === 固定相对位置摄像机（Fixed Relative Position Camera）===
-        // 确保飞机始终在屏幕中央，摄像机始终在飞机尾部朝向机头
+        // === 真正的尾部跟随摄像机（True Tail Following Camera）===
+        // 摄像机始终在飞机尾部方向，跟随飞机朝向，但保持固定距离
 
         const airplanePos = airplane.position.clone();
         const airplaneRotation = airplane.rotation.clone();
 
-        // 1. 计算飞机的局部坐标系方向向量
-        // 飞机的前方向（机头方向）
+        // 1. 计算飞机的前进方向（只考虑Y轴旋转，即偏航）
+        // 忽略俯仰和翻滚，只跟随飞机的水平朝向
+        const yawOnly = new THREE.Euler(0, airplaneRotation.y, 0, 'XYZ');
         const forwardDirection = new THREE.Vector3(1, 0, 0);
-        forwardDirection.applyEuler(airplaneRotation);
+        forwardDirection.applyEuler(yawOnly);
 
-        // 飞机的上方向
-        const upDirection = new THREE.Vector3(0, 1, 0);
-        upDirection.applyEuler(airplaneRotation);
+        // 2. 计算摄像机位置：在飞机尾部方向的固定距离
+        const cameraDistance = 30; // 距离飞机30米
+        const cameraHeight = 15;   // 高度15米
 
-        // 飞机的右方向
-        const rightDirection = new THREE.Vector3(0, 0, -1);
-        rightDirection.applyEuler(airplaneRotation);
+        // 摄像机位置 = 飞机位置 - 前进方向 * 距离 + 高度偏移
+        const cameraPosition = airplanePos.clone();
+        cameraPosition.sub(forwardDirection.clone().multiplyScalar(cameraDistance));
+        cameraPosition.y += cameraHeight;
 
-        // 2. 计算摄像机的目标位置
-        // 摄像机始终在飞机尾部固定距离（基于飞机的局部坐标系）
-        const localOffset = new THREE.Vector3(-30, 15, 0); // 后方30米，上方15米，左右居中
+        // 3. 直接设置摄像机位置（无插值，无延迟）
+        this.camera.position.copy(cameraPosition);
 
-        const targetPosition = airplanePos.clone()
-            .add(forwardDirection.clone().multiplyScalar(localOffset.x))  // 前后偏移（负值=后方）
-            .add(upDirection.clone().multiplyScalar(localOffset.y))       // 上下偏移（正值=上方）
-            .add(rightDirection.clone().multiplyScalar(localOffset.z));   // 左右偏移（0=居中）
-
-        // 3. 直接设置摄像机位置，确保始终跟上飞机
-        // 不使用插值，避免任何延迟导致的偏移
-        this.camera.position.copy(targetPosition);
-
-        // 4. 摄像机始终朝向飞机中心，确保飞机在屏幕正中央
+        // 4. 摄像机始终朝向飞机中心（确保飞机在屏幕正中央）
         this.camera.lookAt(airplanePos);
 
-        // 5. 保持摄像机的上方向为世界坐标系的上方向
-        // 这样可以避免摄像机跟随飞机翻滚，保持稳定的水平视角
+        // 5. 保持摄像机上方向为世界Y轴正方向（水平稳定）
         this.camera.up.set(0, 1, 0);
-        this.camera.updateMatrixWorld();
 
-        // 6. 更新状态记录（用于其他可能的功能）
-        this.lastAirplanePosition.copy(airplanePos);
-        this.lastAirplaneRotation.copy(airplaneRotation);
+        // 6. 更新摄像机矩阵
+        this.camera.updateMatrixWorld();
     }
 
     // 设置摄像机偏移量
