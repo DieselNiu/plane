@@ -8,6 +8,7 @@ export class MultiplayerManager {
         this.connections = new Map();
         this.globalRoomId = 'flight-simulator-global-room';
         this.isHost = false;
+        this.connectionTimeout = null;
         
         this.initMultiplayer();
     }
@@ -26,25 +27,49 @@ export class MultiplayerManager {
         
         this.peer.on('error', (error) => {
             console.log('PeerJS连接错误:', error);
+            this.simulator.uiController.updateConnectionStatus('连接失败');
             this.simulator.uiController.showError('网络连接失败');
+        });
+        
+        this.peer.on('disconnected', () => {
+            console.log('PeerJS连接断开');
+            this.simulator.uiController.updateConnectionStatus('连接断开');
         });
     }
     
     tryConnectToGlobalRoom() {
+        // 设置连接超时
+        this.connectionTimeout = setTimeout(() => {
+            console.log('连接全局房间超时，成为房间主机');
+            this.becomeHost();
+        }, 5000); // 5秒超时
+        
         // 尝试连接到全局房间ID
         const conn = this.peer.connect(this.globalRoomId);
         
         conn.on('open', () => {
             console.log('成功连接到全局房间');
+            if (this.connectionTimeout) {
+                clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
             this.simulator.uiController.updateConnectionStatus('已连接到全局房间');
             this.connections.set(this.globalRoomId, conn);
             this.setupConnectionListeners(conn, this.globalRoomId);
         });
         
         conn.on('error', (error) => {
-            console.log('连接全局房间失败，可能是第一个进入的用户:', error);
-            // 如果连接失败，说明我们是第一个用户，成为房间主机
+            console.log('连接全局房间失败，成为房间主机:', error);
+            if (this.connectionTimeout) {
+                clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
             this.becomeHost();
+        });
+        
+        conn.on('close', () => {
+            console.log('与全局房间的连接关闭');
+            this.simulator.uiController.updateConnectionStatus('连接已关闭');
         });
     }
     
@@ -64,7 +89,13 @@ export class MultiplayerManager {
         
         this.peer.on('error', (error) => {
             console.log('主机创建错误:', error);
+            this.simulator.uiController.updateConnectionStatus('创建房间失败');
             this.simulator.uiController.showError('无法创建房间');
+        });
+        
+        this.peer.on('disconnected', () => {
+            console.log('房间主机连接断开');
+            this.simulator.uiController.updateConnectionStatus('主机连接断开');
         });
     }
     
@@ -76,6 +107,8 @@ export class MultiplayerManager {
             // 更新连接状态显示
             if (this.isHost) {
                 this.simulator.uiController.updateConnectionStatus(`房间主机 - ${this.connections.size + 1}名玩家`);
+            } else {
+                this.simulator.uiController.updateConnectionStatus(`已连接 - ${this.connections.size + 1}名玩家`);
             }
         });
     }
@@ -94,6 +127,8 @@ export class MultiplayerManager {
             // 更新连接状态显示
             if (this.isHost) {
                 this.simulator.uiController.updateConnectionStatus(`房间主机 - ${this.connections.size + 1}名玩家`);
+            } else {
+                this.simulator.uiController.updateConnectionStatus(`已连接 - ${this.connections.size + 1}名玩家`);
             }
         });
         
@@ -165,6 +200,12 @@ export class MultiplayerManager {
     
     // 断开连接
     disconnect() {
+        // 清理连接超时器
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
+        
         // 清理所有连接
         for (const conn of this.connections.values()) {
             if (conn.open) {

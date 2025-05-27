@@ -45,11 +45,13 @@
             right: 10px;
             background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 10px;
+            border-radius: 6px;
             z-index: 100;
             backdrop-filter: blur(5px);
-            max-width: 300px;
+            max-width: 220px;
+            font-size: 11px;
+            line-height: 1.3;
             display: none; /* 移动端隐藏 */
         }
 
@@ -237,16 +239,17 @@
         }
 
         .control-group {
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
 
         .control-key {
             background: #333;
             color: #fff;
-            padding: 2px 6px;
-            border-radius: 3px;
+            padding: 1px 4px;
+            border-radius: 2px;
             font-family: monospace;
-            margin-right: 5px;
+            margin-right: 3px;
+            font-size: 10px;
         }
 
         button {
@@ -378,54 +381,34 @@
     </div>
 
     <div class="controls-panel">
-        <h3>🎮 智能飞行控制</h3>
-        <div class="control-group">
-            <strong>基础控制 (WASD主控制):</strong><br>
-            <span class="control-key">W</span> 加速推进<br>
-            <span class="control-key">S</span> 减速 (地面：倒车 | 空中：减速)<br>
-            <span class="control-key">A</span> / <span class="control-key">D</span> 纯YAW转向<br>
-            &nbsp;&nbsp;• 地面：方向舵控制<br>
-            &nbsp;&nbsp;• 空中：纯偏航转向 (无翻滚)<br>
-            <span class="control-key">Shift</span> 后燃器 (5倍推力)
+        <h3 style="margin: 0 0 8px 0; font-size: 13px;">🎮 飞行控制</h3>
+        
+        <div class="control-group" style="margin-bottom: 6px;">
+            <strong>推力控制:</strong><br>
+            <span class="control-key">W</span> 加速 <span class="control-key">S</span> 减速/倒车<br>
+            <span class="control-key">Shift</span> 后燃器
         </div>
 
-        <div class="control-group">
-            <strong>辅助控制 (方向键):</strong><br>
-            <span class="control-key">↑</span> / <span class="control-key">↓</span> 机头下压/上抬 (俯仰)<br>
-            <span class="control-key">←</span> / <span class="control-key">→</span> 智能协调转弯 (Roll+Yaw混合)
+        <div class="control-group" style="margin-bottom: 6px;">
+            <strong>转向控制:</strong><br>
+            <span class="control-key">A</span> / <span class="control-key">D</span> 左右转向<br>
+            <span class="control-key">←</span> / <span class="control-key">→</span> 翻滚转弯 (仅空中)
         </div>
 
-        <div class="control-group">
-            <strong>飞行模式自动切换:</strong><br>
-            • <span style="color: #4CAF50;">地面模式</span>: 速度&lt;40km/h 且 高度&lt;3m<br>
-            • <span style="color: #2196F3;">空中模式</span>: 速度≥40km/h 或 高度≥3m
+        <div class="control-group" style="margin-bottom: 6px;">
+            <strong>俯仰控制:</strong><br>
+            <span class="control-key">↑</span> 机头下压 <span class="control-key">↓</span> 机头上抬<br>
+            <small style="color: #aaa;">起飞需要达到300km/h + 按住↓键</small>
         </div>
 
-        <div class="control-group">
-            <strong>配平系统:</strong><br>
-            • 自动速度配平 (目标: 200km/h)<br>
-            • 翻滚角自动回中<br>
-            • 俯仰稳定辅助<br>
-            • 偏航阻尼
+        <div class="control-group" style="margin-bottom: 6px;">
+            <strong>飞行模式:</strong><br>
+            <span style="color: #4CAF50;">地面</span>: 速度&lt;40km/h 且 高度&lt;3m<br>
+            <span style="color: #2196F3;">空中</span>: 速度≥40km/h 或 高度≥3m
         </div>
 
-        <div class="control-group">
-            <strong>第三人称跟随摄像机:</strong><br>
-            • 飞机始终居中，固定相对距离<br>
-            • 摄像机位置平滑跟随<br>
-            • 视角始终锁定飞机中心<br>
-            • 姿态独立，自然画面旋转
-        </div>
-
-        <div style="margin-top: 10px; font-size: 11px; color: #aaa;">
-            💡 <strong>飞行控制特性</strong>:<br>
-            • <span style="color: #9C27B0;">纯YAW控制</span>：A/D键实现纯偏航转向，无翻滚<br>
-            • <span style="color: #FF9800;">智能协调转弯</span>：方向键自动混合Roll+Yaw，自然转弯<br>
-            • <span style="color: #2196F3;">模式自适应</span>：地面=方向舵控制，空中=对应飞行操作<br>
-            • <span style="color: #4CAF50;">失速保护</span>：低速时限制最大倾斜角度，避免失控<br>
-            • <span style="color: #00BCD4;">载荷限制</span>：高G力时自动减少机动强度<br>
-            • <span style="color: #795548;">智能配平</span>：速度感知的自动配平，维持稳定<br>
-            • <span style="color: #607D8B;">视觉反馈</span>：操纵面实时反映控制状态
+        <div style="font-size: 10px; color: #aaa; margin-top: 6px;">
+            💡 配备自动配平系统，松开按键后飞机会自动稳定
         </div>
     </div>
 
