@@ -208,4 +208,115 @@ export class UIController {
             frameTimeElement.textContent = `Frame: ${frameTime.toFixed(2)}ms`;
         }
     }
+
+    // 显示Game Over界面
+    showGameOver(reason) {
+        // 创建Game Over遮罩层
+        const gameOverOverlay = document.createElement('div');
+        gameOverOverlay.id = 'gameOverOverlay';
+        gameOverOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            font-family: Arial, sans-serif;
+        `;
+
+        // Game Over标题
+        const gameOverTitle = document.createElement('h1');
+        gameOverTitle.textContent = 'GAME OVER';
+        gameOverTitle.style.cssText = `
+            color: #ff4444;
+            font-size: 4rem;
+            margin: 0 0 20px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            animation: pulse 1.5s infinite;
+        `;
+
+        // 碰撞原因
+        const reasonText = document.createElement('p');
+        reasonText.textContent = `碰撞原因: ${reason}`;
+        reasonText.style.cssText = `
+            color: #ffffff;
+            font-size: 1.5rem;
+            margin: 0 0 40px 0;
+            text-align: center;
+        `;
+
+        // 重新开始按钮
+        const restartButton = document.createElement('button');
+        restartButton.textContent = '重新开始';
+        restartButton.style.cssText = `
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        `;
+
+        // 按钮悬停效果
+        restartButton.addEventListener('mouseenter', () => {
+            restartButton.style.background = '#45a049';
+        });
+        restartButton.addEventListener('mouseleave', () => {
+            restartButton.style.background = '#4CAF50';
+        });
+
+        // 重新开始按钮点击事件
+        restartButton.addEventListener('click', () => {
+            this.hideGameOver();
+            this.simulator.restartGame();
+        });
+
+        // 添加CSS动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 组装界面
+        gameOverOverlay.appendChild(gameOverTitle);
+        gameOverOverlay.appendChild(reasonText);
+        gameOverOverlay.appendChild(restartButton);
+
+        // 添加到页面
+        document.body.appendChild(gameOverOverlay);
+
+        // 添加键盘事件监听（按空格键重新开始）
+        const handleKeyPress = (event) => {
+            if (event.code === 'Space') {
+                event.preventDefault();
+                this.hideGameOver();
+                this.simulator.restartGame();
+                document.removeEventListener('keydown', handleKeyPress);
+            }
+        };
+        document.addEventListener('keydown', handleKeyPress);
+
+        console.log('Game Over界面已显示');
+    }
+
+    // 隐藏Game Over界面
+    hideGameOver() {
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        if (gameOverOverlay) {
+            gameOverOverlay.remove();
+        }
+        console.log('Game Over界面已隐藏');
+    }
 }

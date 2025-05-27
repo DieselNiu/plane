@@ -223,7 +223,7 @@ export class PhysicsEngine {
         const pitchEffect = Math.max(0.8, Math.cos(this.pitchAngle)); // 最小保持80%效果
 
         // 大幅提高基础转向速率，缩小转向半径
-        const baseYawRate = 2.5; // 从0.8提高到2.5
+        const baseYawRate = 4.0; // 再次提升基础转向速率，增强 A/D 纯 Yaw 控制
 
         return turnInput * deltaTime * baseYawRate * speedFactor * densityFactor * rollEffect * pitchEffect;
     }
@@ -547,14 +547,14 @@ export class PhysicsEngine {
         }
 
         // 偏航阻尼
-        if (!this.simulator.controlsManager.controls.KeyA &&
+        // 仅在地面模式下对 yaw 角进行阻尼，防止地面滑行时机头自动回正
+        // 空中模式下不应强行把 yaw 角拉回 0°，否则会出现用户松开 A/D 后航向自动复原的问题
+        if (this.simulator.flightMode === 'ground' &&
+            !this.simulator.controlsManager.controls.KeyA &&
             !this.simulator.controlsManager.controls.KeyD &&
             !this.simulator.controlsManager.mobileControls.rightJoystick.active) {
 
-            const yawDampingRate = this.simulator.flightMode === 'ground' ?
-                this.simulator.trimSystem.yawDamping * 0.3 :
-                this.simulator.trimSystem.yawDamping * 0.05;
-
+            const yawDampingRate = this.simulator.trimSystem.yawDamping * 0.3;
             this.yawAngle *= (1 - deltaTime * yawDampingRate);
         }
     }

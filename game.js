@@ -9,6 +9,7 @@ import { CameraController } from './modules/CameraController.js';
 import { UIController } from './modules/UIController.js';
 import { MultiplayerManager } from './modules/MultiplayerManager.js';
 import { WaterEffects } from './modules/WaterEffects.js';
+import { CollisionDetection } from './modules/CollisionDetection.js';
 
 class FlightSimulator {
     constructor() {
@@ -17,6 +18,14 @@ class FlightSimulator {
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.clock = new THREE.Clock();
+
+        // 保存初始状态
+        this.initialState = {
+            position: new THREE.Vector3(-370, 2, 0), // 初始跑道位置
+            velocity: new THREE.Vector3(0, 0, 0),
+            throttle: 0,
+            flightMode: 'ground'
+        };
 
         // 初始化游戏状态
         this.velocity = new THREE.Vector3(0, 0, 0);
@@ -86,6 +95,10 @@ class FlightSimulator {
         this.uiController = new UIController(this);
         this.multiplayerManager = new MultiplayerManager(this);
         this.waterEffects = new WaterEffects(this.scene, this.renderer);
+        this.collisionDetection = new CollisionDetection(this);
+
+        // 设置初始位置
+        this.resetToInitialPosition();
 
         // 设置窗口大小变化监听
         window.addEventListener('resize', () => this.onWindowResize());
@@ -117,8 +130,14 @@ class FlightSimulator {
 
         const deltaTime = this.clock.getDelta();
 
-        // 更新物理引擎
-        this.physicsEngine.updatePhysics(deltaTime);
+        // 只有在游戏未结束时才更新物理引擎
+        if (!this.collisionDetection.isGameOverState()) {
+            // 更新物理引擎
+            this.physicsEngine.updatePhysics(deltaTime);
+
+            // 检测碰撞
+            this.collisionDetection.checkCollisions();
+        }
 
         // 更新UI
         this.uiController.updateUI();
@@ -153,6 +172,49 @@ class FlightSimulator {
             bannerGroup.rotation.z = swayZ * 0.03;
             bannerGroup.position.y = swayY;
         }
+    }
+
+    // 重置到初始位置
+    resetToInitialPosition() {
+        // 重置飞机位置和状态
+        this.airplane.position.copy(this.initialState.position);
+        this.airplane.rotation.set(0, 0, 0);
+        
+        // 重置物理状态
+        this.velocity.copy(this.initialState.velocity);
+        this.throttle = this.initialState.throttle;
+        this.flightMode = this.initialState.flightMode;
+        this.modeTransitionSmoothing = 1.0;
+        
+        // 重置其他状态
+        this.afterburnerActive = false;
+        this.canTakeoff = false;
+        
+        // 重置物理引擎的角度
+        if (this.physicsEngine) {
+            this.physicsEngine.pitchAngle = 0;
+            this.physicsEngine.yawAngle = 0;
+            this.physicsEngine.rollAngle = 0;
+            this.physicsEngine.elevatorDeflection = 0;
+        }
+        
+        console.log('飞机已重置到初始位置');
+    }
+
+    // 重新开始游戏
+    restartGame() {
+        console.log('重新开始游戏...');
+        
+        // 重置碰撞检测
+        this.collisionDetection.reset();
+        
+        // 重置到初始位置
+        this.resetToInitialPosition();
+        
+        // 隐藏Game Over界面（如果还在显示）
+        this.uiController.hideGameOver();
+        
+        console.log('游戏已重新开始');
     }
 
     onWindowResize() {
