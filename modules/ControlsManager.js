@@ -59,15 +59,24 @@ export class ControlsManager {
         }, { passive: false });
 
         document.addEventListener('gesturestart', (event) => {
-            event.preventDefault();
+            // 只在控制器区域阻止手势
+            if (event.target.closest('.joystick') || event.target.closest('.directional-controls')) {
+                event.preventDefault();
+            }
         });
 
         document.addEventListener('gesturechange', (event) => {
-            event.preventDefault();
+            // 只在控制器区域阻止手势
+            if (event.target.closest('.joystick') || event.target.closest('.directional-controls')) {
+                event.preventDefault();
+            }
         });
 
         document.addEventListener('gestureend', (event) => {
-            event.preventDefault();
+            // 只在控制器区域阻止手势
+            if (event.target.closest('.joystick') || event.target.closest('.directional-controls')) {
+                event.preventDefault();
+            }
         });
     }
 
@@ -80,7 +89,8 @@ export class ControlsManager {
 
         // 统一的触摸开始处理
         const handleTouchStart = (event) => {
-            event.preventDefault();
+            // 检查是否有任何触摸点在控制器上
+            let hasControllerTouch = false;
 
             // 处理所有新的触摸点
             for (let i = 0; i < event.changedTouches.length; i++) {
@@ -92,6 +102,8 @@ export class ControlsManager {
                 const controllerType = this.getControllerType(target);
 
                 if (controllerType && !this.activeTouches[controllerType]) {
+                    hasControllerTouch = true;
+
                     // 分配触摸点给控制器
                     this.activeTouches[controllerType] = touchId;
                     this.touchStates.set(touchId, {
@@ -106,11 +118,17 @@ export class ControlsManager {
                     this.updateControllerFromTouch(controllerType, touch);
                 }
             }
+
+            // 只有当触摸点在控制器上时才阻止默认行为
+            if (hasControllerTouch) {
+                event.preventDefault();
+            }
         };
 
         // 统一的触摸移动处理
         const handleTouchMove = (event) => {
-            event.preventDefault();
+            // 检查是否有任何移动的触摸点在控制器上
+            let hasControllerTouch = false;
 
             // 处理所有移动的触摸点
             for (let i = 0; i < event.changedTouches.length; i++) {
@@ -119,6 +137,8 @@ export class ControlsManager {
                 const touchState = this.touchStates.get(touchId);
 
                 if (touchState) {
+                    hasControllerTouch = true;
+
                     // 更新触摸状态
                     touchState.currentX = touch.clientX;
                     touchState.currentY = touch.clientY;
@@ -127,11 +147,17 @@ export class ControlsManager {
                     this.updateControllerFromTouch(touchState.controllerType, touch);
                 }
             }
+
+            // 只有当触摸点在控制器上时才阻止默认行为
+            if (hasControllerTouch) {
+                event.preventDefault();
+            }
         };
 
         // 统一的触摸结束处理
         const handleTouchEnd = (event) => {
-            event.preventDefault();
+            // 检查是否有任何结束的触摸点在控制器上
+            let hasControllerTouch = false;
 
             // 处理所有结束的触摸点
             for (let i = 0; i < event.changedTouches.length; i++) {
@@ -140,6 +166,8 @@ export class ControlsManager {
                 const touchState = this.touchStates.get(touchId);
 
                 if (touchState) {
+                    hasControllerTouch = true;
+
                     // 重置对应的控制器
                     this.resetController(touchState.controllerType);
 
@@ -147,6 +175,11 @@ export class ControlsManager {
                     this.activeTouches[touchState.controllerType] = null;
                     this.touchStates.delete(touchId);
                 }
+            }
+
+            // 只有当触摸点在控制器上时才阻止默认行为
+            if (hasControllerTouch) {
+                event.preventDefault();
             }
         };
 
