@@ -119,7 +119,7 @@ export class Environment {
             this.scene.add(rightLight);
         }
 
-        // 起飞点特殊标志灯（绿色）
+        // 起飞点特殊标志灯（绿色）- 调整到飞机后面50米位置
         const startLightMaterial = new THREE.MeshLambertMaterial({
             color: 0x00ff00,
             emissive: 0x003300
@@ -130,7 +130,7 @@ export class Environment {
                 new THREE.SphereGeometry(1.2, 8, 6),
                 startLightMaterial
             );
-            startLight.position.set(-375 + i * 2, 2, 0);
+            startLight.position.set(-420 + i * 2, 2, 0);
             this.scene.add(startLight);
         }
     }
