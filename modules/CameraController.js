@@ -3,41 +3,48 @@
 export class CameraController {
     constructor(camera) {
         this.camera = camera;
-        this.offset = new THREE.Vector3(-30, 15, 0); // 后方30米，上方15米
+        this.offset = new THREE.Vector3(-30, 8, 0); // 后方30米，上方8米，固定距离
     }
 
     updateCamera(airplane) {
-        // === 真正的尾部跟随摄像机（True Tail Following Camera）===
-        // 摄像机始终在飞机尾部方向，跟随飞机朝向，但保持固定距离
+        // === 固定距离姿态跟随摄像机（Fixed Distance Attitude Following Camera）===
+        // 摄像机保持固定距离跟随飞机，跟随所有姿态变化，稳定可靠
 
         const airplanePos = airplane.position.clone();
         const airplaneRotation = airplane.rotation.clone();
 
-        // 1. 计算飞机的前进方向（只考虑Y轴旋转，即偏航）
-        // 忽略俯仰和翻滚，只跟随飞机的水平朝向
-        const yawOnly = new THREE.Euler(0, airplaneRotation.y, 0, 'XYZ');
-        const forwardDirection = new THREE.Vector3(1, 0, 0);
-        forwardDirection.applyEuler(yawOnly);
+        // 1. 计算飞机的真实姿态方向（包含所有旋转轴）
+        const forwardDirection = new THREE.Vector3(1, 0, 0); // 飞机前进方向
+        const upDirection = new THREE.Vector3(0, 1, 0);       // 飞机上方向
+        const rightDirection = new THREE.Vector3(0, 0, -1);   // 飞机右侧方向
 
-        // 2. 计算摄像机位置：在飞机尾部方向的固定距离
-        const cameraDistance = 30; // 距离飞机30米
-        const cameraHeight = 15;   // 高度15米
+        // 应用飞机的完整旋转
+        forwardDirection.applyEuler(airplaneRotation);
+        upDirection.applyEuler(airplaneRotation);
+        rightDirection.applyEuler(airplaneRotation);
 
-        // 摄像机位置 = 飞机位置 - 前进方向 * 距离 + 高度偏移
+        // 2. 固定距离和高度 - 永远不变
+        const cameraDistance = 30; // 固定距离30米，永不改变
+        const cameraHeightOffset = 8; // 固定高度偏移8米，永不改变
+
+        // 3. 计算摄像机位置：始终相对飞机的固定位置
+        // 摄像机位置 = 飞机位置 - 前进方向 * 固定距离 + 上方向 * 固定高度偏移
         const cameraPosition = airplanePos.clone();
         cameraPosition.sub(forwardDirection.clone().multiplyScalar(cameraDistance));
-        cameraPosition.y += cameraHeight;
+        cameraPosition.add(upDirection.clone().multiplyScalar(cameraHeightOffset));
 
-        // 3. 直接设置摄像机位置（无插值，无延迟）
-        this.camera.position.copy(cameraPosition);
+        // 4. 轻微平滑移动，只是为了避免微小抖动，保持响应性
+        const smoothFactor = 0.15; // 适中的平滑度，既避免抖动又保持响应
+        this.camera.position.lerp(cameraPosition, smoothFactor);
 
-        // 4. 摄像机始终朝向飞机中心（确保飞机在屏幕正中央）
+        // 5. 摄像机始终朝向飞机中心
         this.camera.lookAt(airplanePos);
 
-        // 5. 保持摄像机上方向为世界Y轴正方向（水平稳定）
-        this.camera.up.set(0, 1, 0);
+        // 6. 设置摄像机的上方向跟随飞机的up方向（产生倾斜效果）
+        const targetUp = upDirection.clone();
+        this.camera.up.lerp(targetUp, smoothFactor);
 
-        // 6. 更新摄像机矩阵
+        // 7. 更新摄像机矩阵
         this.camera.updateMatrixWorld();
     }
 
