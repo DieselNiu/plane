@@ -10,6 +10,7 @@ import { UIController } from './modules/UIController.js';
 import { MultiplayerManager } from './modules/MultiplayerManager.js';
 import { WaterEffects } from './modules/WaterEffects.js';
 import { CollisionDetection } from './modules/CollisionDetection.js';
+import { FakePlayersManager } from './modules/FakePlayersManager.js';
 
 class FlightSimulator {
     constructor() {
@@ -96,6 +97,7 @@ class FlightSimulator {
         this.multiplayerManager = new MultiplayerManager(this);
         this.waterEffects = new WaterEffects(this.scene, this.renderer);
         this.collisionDetection = new CollisionDetection(this);
+        this.fakePlayersManager = new FakePlayersManager(this);
 
         // 设置初始位置
         this.resetToInitialPosition();
@@ -210,6 +212,12 @@ class FlightSimulator {
         
         // 重置到初始位置
         this.resetToInitialPosition();
+        
+        // 重置假玩家管理器
+        if (this.fakePlayersManager) {
+            this.fakePlayersManager.cleanup();
+            this.fakePlayersManager = new FakePlayersManager(this);
+        }
         
         // 隐藏Game Over界面（如果还在显示）
         this.uiController.hideGameOver();

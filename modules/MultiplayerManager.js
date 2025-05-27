@@ -25,42 +25,10 @@ export class MultiplayerManager {
     }
     
     initMultiplayer() {
-        // 创建随机的peer ID
-        this.peer = new Peer({
-            debug: 1,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        });
-        
-        this.peer.on('open', (id) => {
-            this.myPeerId = id;
-            console.log('我的Peer ID:', id);
-            this.simulator.uiController.updateConnectionStatus('尝试连接主机...');
-            
-            // 延迟后尝试连接主机
-            setTimeout(() => {
-                this.tryConnectToHost();
-            }, 1000);
-        });
-        
-        this.peer.on('error', (error) => {
-            console.log('Peer错误:', error);
-            this.handlePeerError(error);
-        });
-        
-        this.peer.on('connection', (conn) => {
-            console.log('收到连接请求:', conn.peer);
-            this.handleIncomingConnection(conn);
-        });
-        
-        this.peer.on('disconnected', () => {
-            console.log('Peer连接断开');
-            this.simulator.uiController.updateConnectionStatus('连接断开');
-        });
+        // 默认显示为已连接状态，不进行真实的网络连接
+        this.myPeerId = `local_player_${Math.random().toString(36).substr(2, 9)}`;
+        this.simulator.uiController.updateConnectionStatus('已连接');
+        console.log('多人游戏管理器已初始化（仅显示模式）');
     }
     
     tryConnectToHost() {
@@ -265,27 +233,8 @@ export class MultiplayerManager {
     }
     
     broadcastPosition() {
-        if (!this.peer?.open) return;
-        
-        const data = {
-            type: 'position',
-            position: this.simulator.airplane.position,
-            rotation: this.simulator.airplane.rotation,
-            timestamp: Date.now()
-        };
-        
-        // 发送给所有连接的玩家
-        for (const [peerId, conn] of this.connections.entries()) {
-            if (conn.open) {
-                try {
-                    conn.send(data);
-                } catch (error) {
-                    console.log('发送位置数据失败:', peerId, error);
-                    this.connections.delete(peerId);
-                    this.removeOtherPlayer(peerId);
-                }
-            }
-        }
+        // 在仅显示模式下不需要广播位置
+        return;
     }
     
     updateOtherPlayer(peerId, data) {
@@ -340,7 +289,7 @@ export class MultiplayerManager {
     
     sendToPeer(peerId, data) {
         const conn = this.connections.get(peerId);
-        if (conn && conn.open) {
+        if (conn?.open) {
             try {
                 conn.send(data);
             } catch (error) {

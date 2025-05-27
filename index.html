@@ -28,6 +28,7 @@
             backdrop-filter: blur(3px);
             font-size: 12px;
             line-height: 1.2;
+            width: 150px;
         }
 
         .ui-panel h3 {
@@ -96,7 +97,7 @@
             position: absolute;
             width: 60px;
             height: 180px;
-            background: linear-gradient(to bottom, 
+            background: linear-gradient(to bottom,
                 rgba(50, 50, 50, 0.9) 0%,
                 rgba(30, 30, 30, 0.9) 50%,
                 rgba(20, 20, 20, 0.9) 100%);
@@ -112,14 +113,14 @@
             position: absolute;
             width: 50px;
             height: 30px;
-            background: linear-gradient(to bottom, 
+            background: linear-gradient(to bottom,
                 rgba(255, 255, 255, 0.9) 0%,
                 rgba(200, 200, 200, 0.9) 50%,
                 rgba(150, 150, 150, 0.9) 100%);
             border: 2px solid rgba(255, 255, 255, 0.6);
             border-radius: 6px;
             left: 50%;
-            bottom: 60px;
+            bottom: 40px;
             transform: translateX(-50%);
             transition: all 0.1s ease;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -129,7 +130,7 @@
         .throttle-handle:active {
             cursor: grabbing;
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-            background: linear-gradient(to bottom, 
+            background: linear-gradient(to bottom,
                 rgba(255, 255, 100, 0.9) 0%,
                 rgba(220, 220, 100, 0.9) 50%,
                 rgba(180, 180, 100, 0.9) 100%);
@@ -137,7 +138,7 @@
 
         /* 油门推杆激活时的发光效果 */
         .throttle-lever.active {
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5),
                         0 0 20px rgba(100, 200, 255, 0.3);
             border-color: rgba(100, 200, 255, 0.6);
         }
@@ -160,21 +161,21 @@
         .throttle-scale::before {
             content: '';
             position: absolute;
-            top: 10px;
+            top: 15px;
             right: 0;
             width: 8px;
             height: 2px;
             background: rgba(255, 255, 255, 0.6);
-            box-shadow: 
-                0 20px 0 rgba(255, 255, 255, 0.4),
+            box-shadow:
+                0 10px 0 rgba(255, 255, 255, 0.4),
+                0 25px 0 rgba(100, 255, 100, 0.8), /* 中性位置标记 (40px) */
                 0 40px 0 rgba(255, 255, 255, 0.6),
-                0 50px 0 rgba(100, 255, 100, 0.8), /* 中性位置标记 */
                 0 60px 0 rgba(255, 255, 255, 0.4),
                 0 80px 0 rgba(255, 255, 255, 0.6),
                 0 100px 0 rgba(255, 255, 255, 0.4),
                 0 120px 0 rgba(255, 255, 255, 0.6),
                 0 140px 0 rgba(255, 255, 255, 0.4),
-                0 160px 0 rgba(255, 255, 255, 0.6);
+                0 150px 0 rgba(255, 255, 255, 0.6);
         }
 
         .throttle-left {
@@ -182,9 +183,163 @@
             left: 20px;
         }
 
-        .joystick-right {
+        /* 四方向推杆控制器样式 */
+        .directional-controls {
+            position: absolute;
             bottom: 20px;
             right: 20px;
+            width: 140px;
+            height: 140px;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .direction-lever {
+            position: absolute;
+            background: linear-gradient(to bottom,
+                rgba(60, 60, 60, 0.9) 0%,
+                rgba(40, 40, 40, 0.9) 50%,
+                rgba(30, 30, 30, 0.9) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s ease;
+        }
+
+        .direction-lever:active {
+            background: linear-gradient(to bottom,
+                rgba(100, 150, 255, 0.9) 0%,
+                rgba(80, 120, 200, 0.9) 50%,
+                rgba(60, 100, 180, 0.9) 100%);
+            border-color: rgba(100, 150, 255, 0.8);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6),
+                        0 0 15px rgba(100, 150, 255, 0.5);
+        }
+
+        .lever-handle {
+            position: absolute;
+            background: linear-gradient(to bottom,
+                rgba(255, 255, 255, 0.9) 0%,
+                rgba(220, 220, 220, 0.9) 50%,
+                rgba(180, 180, 180, 0.9) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+            transition: all 0.1s ease;
+        }
+
+        .direction-lever:active .lever-handle {
+            background: linear-gradient(to bottom,
+                rgba(255, 255, 150, 0.9) 0%,
+                rgba(240, 240, 130, 0.9) 50%,
+                rgba(200, 200, 110, 0.9) 100%);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5),
+                        0 0 8px rgba(255, 255, 150, 0.4);
+        }
+
+        .lever-label {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        /* 上推杆 */
+        .direction-up {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 35px;
+            height: 50px;
+        }
+
+        .direction-up .lever-handle {
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 25px;
+            height: 20px;
+        }
+
+        .direction-up .lever-label {
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* 下推杆 */
+        .direction-down {
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 35px;
+            height: 50px;
+        }
+
+        .direction-down .lever-handle {
+            bottom: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 25px;
+            height: 20px;
+        }
+
+        .direction-down .lever-label {
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* 左推杆 */
+        .direction-left {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 35px;
+        }
+
+        .direction-left .lever-handle {
+            left: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 25px;
+        }
+
+        .direction-left .lever-label {
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* 右推杆 */
+        .direction-right {
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 35px;
+        }
+
+        .direction-right .lever-handle {
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 25px;
+        }
+
+        .direction-right .lever-label {
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
         .joystick-label {
@@ -206,13 +361,13 @@
 
         /* 油门刻度标签 */
         .throttle-scale::after {
-            content: 'MAX\A\A\A\A\AIDLE\A\A\A\AREV';
+            content: 'MAX\A\A\A\A\A\A\AIDLE\A\AREV';
             position: absolute;
             right: -25px;
-            top: 5px;
+            top: 10px;
             color: rgba(255, 255, 255, 0.6);
             font-size: 8px;
-            line-height: 20px;
+            line-height: 18px;
             white-space: pre;
             font-family: monospace;
             pointer-events: none;
@@ -287,7 +442,7 @@
         .attitude-panel {
             position: absolute;
             top: 10px;
-            left: 220px;
+            left: 190px;
             background: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 8px 12px;
@@ -296,7 +451,7 @@
             backdrop-filter: blur(3px);
             font-size: 12px;
             line-height: 1.2;
-            min-width: 120px;
+            width: 150px;
         }
 
         .attitude-panel h3 {
@@ -349,34 +504,7 @@
             display: none;
         }
 
-        /* 调试信息面板样式 */
-        .debug-panel {
-            position: absolute;
-            top: 10px;
-            left: 360px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            z-index: 100;
-            backdrop-filter: blur(3px);
-            font-size: 12px;
-            line-height: 1.2;
-            min-width: 150px;
-        }
 
-        .debug-panel h3 {
-            margin: 0 0 4px 0;
-            font-size: 14px;
-            color: #FF9800;
-        }
-
-        /* 移动端隐藏调试面板 */
-        @media (max-width: 767px) {
-            .debug-panel {
-                display: none;
-            }
-        }
 
 
     </style>
@@ -391,11 +519,7 @@
         <div>转弯: <span id="turnIndicator" class="status-value">直飞</span></div>
         <div id="precisionMode" style="color: #9C27B0; font-weight: bold;"></div>
         <div>在线玩家: <span id="playerCount" class="status-value">1</span></div>
-        <div>连接状态: <span id="connectionStatus" class="status-value">连接中...</span></div>
-        <div style="margin-top: 5px;">
-            <button id="reconnectBtn" onclick="game.multiplayerManager.reconnect()" 
-                    style="font-size: 10px; padding: 3px 6px; background: #FF9800;">重连</button>
-        </div>
+        <div>连接状态: <span id="connectionStatus" class="status-value">已连接</span></div>
     </div>
 
     <!-- 新增：姿态指示器面板 -->
@@ -406,11 +530,7 @@
         <div>航向: <span id="heading" class="attitude-value">0°</span></div>
     </div>
 
-    <!-- 调试信息面板 -->
-    <div class="debug-panel">
-        <h3>🔧 连接调试</h3>
-        <div id="debugInfo" style="font-size: 10px; line-height: 1.3;"></div>
-    </div>
+
 
 
 
@@ -421,7 +541,7 @@
 
     <div class="controls-panel">
         <h3 style="margin: 0 0 8px 0; font-size: 13px;">🎮 飞行控制</h3>
-        
+
         <div class="control-group" style="margin-bottom: 6px;">
             <strong>推力控制:</strong><br>
             <span class="control-key">W</span> 加速 <span class="control-key">S</span> 减速/倒车<br>
@@ -446,8 +566,15 @@
             <span style="color: #2196F3;">空中</span>: 速度≥40km/h 或 高度≥3m
         </div>
 
+        <div class="control-group" style="margin-bottom: 6px;">
+            <strong>假玩家控制:</strong><br>
+            <span class="control-key">F1</span> 切换假玩家系统<br>
+            <span class="control-key">F2</span> / <span class="control-key">F3</span> 调整目标人数
+        </div>
+
         <div style="font-size: 10px; color: #aaa; margin-top: 6px;">
-            💡 配备自动配平系统，松开按键后飞机会自动稳定
+            💡 配备自动配平系统，松开按键后飞机会自动稳定<br>
+            🤖 假玩家会模拟真实的飞行行为，人数会动态变化
         </div>
     </div>
 
@@ -460,15 +587,84 @@
             <div class="throttle-scale"></div>
         </div>
 
-        <!-- 右摇杆：飞行控制（前后俯仰，左右转向） -->
-        <div class="joystick joystick-right" id="rightJoystick">
+        <!-- 右侧：四方向推杆控制 -->
+        <div class="directional-controls" id="rightJoystick">
             <div class="joystick-label">飞行控制</div>
-            <div class="joystick-knob" id="rightKnob"></div>
+
+            <!-- 上推杆 - 机头下压 -->
+            <div class="direction-lever direction-up" id="leverUp">
+                <div class="lever-handle"></div>
+                <div class="lever-label">↑</div>
+            </div>
+
+            <!-- 下推杆 - 机头上抬 -->
+            <div class="direction-lever direction-down" id="leverDown">
+                <div class="lever-handle"></div>
+                <div class="lever-label">↓</div>
+            </div>
+
+            <!-- 左推杆 - 左转 -->
+            <div class="direction-lever direction-left" id="leverLeft">
+                <div class="lever-handle"></div>
+                <div class="lever-label">←</div>
+            </div>
+
+            <!-- 右推杆 - 右转 -->
+            <div class="direction-lever direction-right" id="leverRight">
+                <div class="lever-handle"></div>
+                <div class="lever-label">→</div>
+            </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script type="module" src="game.js"></script>
+
+    <script>
+        // 假玩家控制函数
+        let fakePlayersEnabled = true;
+
+        function toggleFakePlayers() {
+            if (window.game && window.game.fakePlayersManager) {
+                fakePlayersEnabled = !fakePlayersEnabled;
+                window.game.fakePlayersManager.setPaused(!fakePlayersEnabled);
+
+                console.log(`假玩家系统 ${fakePlayersEnabled ? '已启用' : '已暂停'}`);
+            }
+        }
+
+        // 设置目标玩家数量
+        function setTargetPlayerCount(count) {
+            if (window.game && window.game.fakePlayersManager) {
+                window.game.fakePlayersManager.setTargetPlayerCount(count);
+            }
+        }
+
+        // 键盘快捷键
+        document.addEventListener('keydown', (event) => {
+            // F1 - 切换假玩家
+            if (event.key === 'F1') {
+                event.preventDefault();
+                toggleFakePlayers();
+            }
+            // F2 - 减少目标人数
+            else if (event.key === 'F2') {
+                event.preventDefault();
+                if (window.game && window.game.fakePlayersManager) {
+                    const current = window.game.fakePlayersManager.targetPlayerCount;
+                    setTargetPlayerCount(Math.max(10, current - 5));
+                }
+            }
+            // F3 - 增加目标人数
+            else if (event.key === 'F3') {
+                event.preventDefault();
+                if (window.game && window.game.fakePlayersManager) {
+                    const current = window.game.fakePlayersManager.targetPlayerCount;
+                    setTargetPlayerCount(Math.min(30, current + 5));
+                }
+            }
+        });
+    </script>
 </body>
 </html>

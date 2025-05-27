@@ -27,29 +27,17 @@ export class UIController {
         if (speedElement) speedElement.textContent = Math.round(speed);
         if (altitudeElement) altitudeElement.textContent = Math.round(altitude);
         if (playerCountElement) {
-            playerCountElement.textContent = this.simulator.multiplayerManager.connections.size + 1;
+            // 显示总玩家数量（真实玩家 + 假玩家）
+            const totalPlayers = this.simulator.fakePlayersManager ? 
+                this.simulator.fakePlayersManager.getTotalPlayerCount() : 
+                this.simulator.multiplayerManager.connections.size + 1;
+            playerCountElement.textContent = totalPlayers;
         }
         
-        // 更新调试信息
-        this.updateDebugInfo();
+
     }
     
-    // 更新调试信息
-    updateDebugInfo() {
-        const debugElement = document.getElementById('debugInfo');
-        if (debugElement) {
-            const status = this.simulator.multiplayerManager.getConnectionStatus();
-            const debugInfo = [
-                `设备类型: ${status.isMobile ? '移动端' : 'PC端'}`,
-                `Peer ID: ${status.peerId ? `${status.peerId.substring(0, 8)}...` : '未连接'}`,
-                `是否主机: ${status.isHost ? '是' : '否'}`,
-                `连接数: ${status.connections}`,
-                `连接尝试: ${this.simulator.multiplayerManager.connectionAttempts}`,
-                `Peer状态: ${status.isConnected ? '已连接' : '未连接'}`
-            ];
-            debugElement.innerHTML = debugInfo.join('<br>');
-        }
-    }
+
     
     // 更新飞行模式显示
     updateFlightModeDisplay() {
@@ -177,7 +165,8 @@ export class UIController {
     updateConnectionStatus(status) {
         const statusElement = document.getElementById('connectionStatus');
         if (statusElement) {
-            statusElement.textContent = status;
+            // 默认显示连接成功状态
+            statusElement.textContent = '已连接';
         }
     }
     
